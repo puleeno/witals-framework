@@ -1,5 +1,5 @@
 {
-    "name": "puleeno/witals-framework",
+    "name": "witals/framework",
     "type": "library",
     "license": "MIT",
     "autoload": {
