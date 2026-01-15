@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Witals\Framework;
 
+use Witals\Framework\Container\Container;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Contracts\StateManager;
@@ -15,12 +16,10 @@ use Witals\Framework\Lifecycle\LifecycleFactory;
  * Main Application Class
  * Handles request lifecycle and environment detection
  */
-class Application
+class Application extends Container
 {
     protected string $basePath;
     protected bool $isRoadRunner = false;
-    protected array $bindings = [];
-    protected array $instances = [];
     protected array $providers = [];
     protected ?StateManager $stateManager = null;
     protected ?LifecycleManager $lifecycle = null;
@@ -29,6 +28,38 @@ class Application
     public function __construct(string $basePath)
     {
         $this->basePath = $basePath;
+
+        $this->registerBaseBindings();
+        $this->registerCoreContainerAliases();
+    }
+
+    /**
+     * Register the basic bindings into the container.
+     */
+    protected function registerBaseBindings(): void
+    {
+        static::setInstance($this);
+
+        $this->instance('app', $this);
+        $this->instance(self::class, $this);
+    }
+
+    /**
+     * Register the core class aliases in the container.
+     */
+    protected function registerCoreContainerAliases(): void
+    {
+        $this->alias('app', self::class);
+    }
+
+    /**
+     * Alias a type to a different name.
+     */
+    public function alias(string $abstract, string $alias): void
+    {
+        $this->bind($alias, function ($app) use ($abstract) {
+            return $app->make($abstract);
+        });
     }
 
     /**
@@ -123,48 +154,6 @@ class Application
     }
 
     /**
-     * Register a singleton binding
-     */
-    public function singleton(string $abstract, string $concrete): void
-    {
-        $this->bindings[$abstract] = [
-            'concrete' => $concrete,
-            'singleton' => true,
-        ];
-    }
-
-    /**
-     * Register an existing instance
-     */
-    public function instance(string $abstract, object $instance): void
-    {
-        $this->instances[$abstract] = $instance;
-    }
-
-    /**
-     * Resolve a binding from the container
-     */
-    public function make(string $abstract)
-    {
-        if (isset($this->instances[$abstract])) {
-            return $this->instances[$abstract];
-        }
-
-        if (!isset($this->bindings[$abstract])) {
-            return new $abstract();
-        }
-
-        $concrete = $this->bindings[$abstract]['concrete'];
-        $instance = new $concrete($this);
-
-        if ($this->bindings[$abstract]['singleton']) {
-            $this->instances[$abstract] = $instance;
-        }
-
-        return $instance;
-    }
-
-    /**
      * Register configured service providers
      */
     public function registerConfiguredProviders(): void
@@ -178,31 +167,39 @@ class Application
      */
     public function handle(Request $request): Response
     {
-        try {
-            // Ensure application is booted
-            $this->boot();
+        // Use runScope to ensure request isolation
+        // Any service resolved during this closure (that wasn't already resolved)
+        // will be automatically cleaned up when the closure ends.
+        return $this->runScope(
+            [Request::class => $request],
+            function () use ($request) {
+                try {
+                    // Ensure application is booted
+                    $this->boot();
 
-            // Lifecycle: Request Start
-            $this->lifecycle()->onRequestStart($request);
+                    // Lifecycle: Request Start
+                    $this->lifecycle()->onRequestStart($request);
 
-            // Handle the request
-            $kernel = $this->make(\Witals\Framework\Contracts\Http\Kernel::class);
-            $response = $kernel->handle($request);
+                    // Handle the request
+                    $kernel = $this->make(\Witals\Framework\Contracts\Http\Kernel::class);
+                    $response = $kernel->handle($request);
 
-            // Lifecycle: Request End
-            $this->lifecycle()->onRequestEnd($request, $response);
+                    // Lifecycle: Request End
+                    $this->lifecycle()->onRequestEnd($request, $response);
 
-            return $response;
-        } catch (\Throwable $e) {
-            $response = $this->handleException($e);
+                    return $response;
+                } catch (\Throwable $e) {
+                    $response = $this->handleException($e);
 
-            // Still call request end even on error
-            if (isset($request)) {
-                $this->lifecycle()->onRequestEnd($request, $response);
+                    // Still call request end even on error
+                    if (isset($request)) {
+                        $this->lifecycle()->onRequestEnd($request, $response);
+                    }
+
+                    return $response;
+                }
             }
-
-            return $response;
-        }
+        );
     }
 
     /**
@@ -222,13 +219,12 @@ class Application
     public function afterRequest(Request $request, Response $response): void
     {
         if ($this->isRoadRunner) {
-            // Clear request-scoped state
+            // Note: Instance cleanup is handled by runScope() in handle()
+
+            // Clear request-scoped state in manager
             if ($this->stateManager && method_exists($this->stateManager, 'afterRequest')) {
                 $this->stateManager->afterRequest();
             }
-
-            // Reset singletons that should not persist between requests
-            // You can add logic here to reset specific services
 
             // Run garbage collection
             gc_collect_cycles();

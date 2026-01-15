@@ -19,14 +19,15 @@ class LifecycleFactory
     public static function create(Application $app): LifecycleManager
     {
         if ($app->isRoadRunner()) {
-            return new RoadRunnerLifecycle();
+            return $app->make(RoadRunnerLifecycle::class);
         }
 
-        return new TraditionalLifecycle();
+        return $app->make(TraditionalLifecycle::class);
     }
 
     /**
      * Create traditional lifecycle explicitly
+     * Note: This strictly creates a new instance, usage of create() via Application is preferred.
      */
     public static function createTraditional(): LifecycleManager
     {
@@ -35,6 +36,7 @@ class LifecycleFactory
 
     /**
      * Create RoadRunner lifecycle explicitly
+     * Note: This strictly creates a new instance, usage of create() via Application is preferred.
      */
     public static function createRoadRunner(): LifecycleManager
     {

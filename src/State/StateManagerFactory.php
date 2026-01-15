@@ -19,14 +19,15 @@ class StateManagerFactory
     public static function create(Application $app): StateManager
     {
         if ($app->isRoadRunner()) {
-            return new StatefulManager();
+            return $app->make(StatefulManager::class);
         }
 
-        return new StatelessManager();
+        return $app->make(StatelessManager::class);
     }
 
     /**
      * Create stateless manager explicitly
+     * Note: This strictly creates a new instance, usage of create() via Application is preferred.
      */
     public static function createStateless(): StateManager
     {
@@ -35,6 +36,7 @@ class StateManagerFactory
 
     /**
      * Create stateful manager explicitly
+     * Note: This strictly creates a new instance, usage of create() via Application is preferred.
      */
     public static function createStateful(): StateManager
     {
