@@ -322,4 +322,12 @@ class Container implements ContainerContract
     {
         return $this->bindings;
     }
+
+    /**
+     * Determine if the given abstract type has been bound.
+     */
+    public function has(string $abstract): bool
+    {
+        return isset($this->bindings[$abstract]) || isset($this->instances[$abstract]);
+    }
 }

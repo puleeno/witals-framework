@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Witals\Framework\State;
 
 use Witals\Framework\Contracts\StateManager;
+use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\Application;
 
 /**
@@ -18,11 +19,26 @@ class StateManagerFactory
      */
     public static function create(Application $app): StateManager
     {
-        if ($app->isRoadRunner()) {
+        $runtime = $app->getRuntime();
+
+        // Long-running runtimes need stateful managers
+        if ($runtime->isLongRunning()) {
             return $app->make(StatefulManager::class);
         }
 
         return $app->make(StatelessManager::class);
+    }
+
+    /**
+     * Create state manager by runtime type
+     */
+    public static function createByRuntime(RuntimeType $runtime): StateManager
+    {
+        if ($runtime->isLongRunning()) {
+            return new StatefulManager();
+        }
+
+        return new StatelessManager();
     }
 
     /**

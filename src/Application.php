@@ -8,6 +8,7 @@ use Witals\Framework\Container\Container;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Contracts\StateManager;
+use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\State\StateManagerFactory;
 use Witals\Framework\Contracts\LifecycleManager;
 use Witals\Framework\Lifecycle\LifecycleFactory;
@@ -19,15 +20,16 @@ use Witals\Framework\Lifecycle\LifecycleFactory;
 class Application extends Container
 {
     protected string $basePath;
-    protected bool $isRoadRunner = false;
+    protected RuntimeType $runtime;
     protected array $providers = [];
     protected ?StateManager $stateManager = null;
     protected ?LifecycleManager $lifecycle = null;
     protected bool $booted = false;
 
-    public function __construct(string $basePath)
+    public function __construct(string $basePath, ?RuntimeType $runtime = null)
     {
         $this->basePath = $basePath;
+        $this->runtime = $runtime ?? RuntimeType::detect();
 
         $this->registerBaseBindings();
         $this->registerCoreContainerAliases();
@@ -88,15 +90,23 @@ class Application extends Container
     }
 
     /**
-     * Set RoadRunner mode
+     * Set runtime mode
      */
-    public function setRoadRunnerMode(bool $enabled): void
+    public function setRuntime(RuntimeType $runtime): void
     {
-        $this->isRoadRunner = $enabled;
+        $this->runtime = $runtime;
 
         // Initialize managers after setting mode
         $this->initializeStateManager();
         $this->initializeLifecycle();
+    }
+
+    /**
+     * Get current runtime type
+     */
+    public function getRuntime(): RuntimeType
+    {
+        return $this->runtime;
     }
 
     /**
@@ -142,7 +152,55 @@ class Application extends Container
      */
     public function isRoadRunner(): bool
     {
-        return $this->isRoadRunner;
+        return $this->runtime === RuntimeType::ROADRUNNER;
+    }
+
+    /**
+     * Check if running on ReactPHP
+     */
+    public function isReactPhp(): bool
+    {
+        return $this->runtime === RuntimeType::REACTPHP;
+    }
+
+    /**
+     * Check if running on Swoole
+     */
+    public function isSwoole(): bool
+    {
+        return $this->runtime === RuntimeType::SWOOLE;
+    }
+
+    /**
+     * Check if running on OpenSwoole
+     */
+    public function isOpenSwoole(): bool
+    {
+        return $this->runtime === RuntimeType::OPENSWOOLE;
+    }
+
+    /**
+     * Check if running in traditional mode
+     */
+    public function isTraditional(): bool
+    {
+        return $this->runtime === RuntimeType::TRADITIONAL;
+    }
+
+    /**
+     * Check if running in long-running mode
+     */
+    public function isLongRunning(): bool
+    {
+        return $this->runtime->isLongRunning();
+    }
+
+    /**
+     * Check if runtime supports async operations
+     */
+    public function isAsync(): bool
+    {
+        return $this->runtime->isAsync();
     }
 
     /**
@@ -167,38 +225,21 @@ class Application extends Container
      */
     public function handle(Request $request): Response
     {
-        // Use runScope to ensure request isolation
+        // 1. Ensure application is booted
+        $this->boot();
+
+        // 2. Create the RequestHandler (which manages init, execute, respond, shutdown)
+        $handler = new \Witals\Framework\Http\RequestHandler(
+            $this,
+            $this->make(\Witals\Framework\Contracts\Http\Kernel::class)
+        );
+
+        // 3. Use runScope to ensure request isolation
         // Any service resolved during this closure (that wasn't already resolved)
         // will be automatically cleaned up when the closure ends.
         return $this->runScope(
             [Request::class => $request],
-            function () use ($request) {
-                try {
-                    // Ensure application is booted
-                    $this->boot();
-
-                    // Lifecycle: Request Start
-                    $this->lifecycle()->onRequestStart($request);
-
-                    // Handle the request
-                    $kernel = $this->make(\Witals\Framework\Contracts\Http\Kernel::class);
-                    $response = $kernel->handle($request);
-
-                    // Lifecycle: Request End
-                    $this->lifecycle()->onRequestEnd($request, $response);
-
-                    return $response;
-                } catch (\Throwable $e) {
-                    $response = $this->handleException($e);
-
-                    // Still call request end even on error
-                    if (isset($request)) {
-                        $this->lifecycle()->onRequestEnd($request, $response);
-                    }
-
-                    return $response;
-                }
-            }
+            fn () => $handler->handle($request)
         );
     }
 
@@ -208,17 +249,17 @@ class Application extends Container
     public function terminate(Request $request, Response $response): void
     {
         // Lifecycle: Terminate (traditional mode only)
-        if (!$this->isRoadRunner) {
+        if (!$this->isLongRunning()) {
             $this->lifecycle()->onTerminate();
         }
     }
 
     /**
-     * Clean up after request (RoadRunner specific)
+     * Clean up after request (long-running runtimes)
      */
     public function afterRequest(Request $request, Response $response): void
     {
-        if ($this->isRoadRunner) {
+        if ($this->isLongRunning()) {
             // Note: Instance cleanup is handled by runScope() in handle()
 
             // Clear request-scoped state in manager
@@ -242,11 +283,19 @@ class Application extends Container
             json_encode([
                 'error' => true,
                 'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'file' => $this->isRunningUnitTests() ? $e->getFile() : null,
+                'line' => $this->isRunningUnitTests() ? $e->getLine() : null,
             ]),
             $statusCode,
             ['Content-Type' => 'application/json']
         );
+    }
+
+    /**
+     * Check if running in unit test environment
+     */
+    public function isRunningUnitTests(): bool
+    {
+        return defined('PHPUNIT_WITALS_TESTSUITE') || getenv('APP_ENV') === 'testing';
     }
 }

@@ -13,5 +13,14 @@
             "email": "puleeno@gmail.com"
         }
     ],
-    "require": {}
+    "require": {
+        "php": "^8.1",
+        "psr/log": "^3.0"
+    },
+    "suggest": {
+        "react/http": "Required for ReactPHP runtime support (^1.9)",
+        "react/event-loop": "Required for ReactPHP runtime support (^1.4)",
+        "ext-swoole": "Required for Swoole runtime support (^5.0)",
+        "ext-openswoole": "Required for OpenSwoole runtime support (^22.0)"
+    }
 }

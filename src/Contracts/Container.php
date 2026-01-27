@@ -49,4 +49,9 @@ interface Container
      * Get the container's bindings.
      */
     public function getBindings(): array;
+
+    /**
+     * Determine if the given abstract type has been bound.
+     */
+    public function has(string $abstract): bool;
 }
