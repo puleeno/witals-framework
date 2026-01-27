@@ -75,7 +75,7 @@ class SwooleServer implements Server
     protected function handleRequest(SwooleRequest $swooleRequest, SwooleResponse $swooleResponse): void
     {
         // Convert Swoole request to Witals Request
-        $request = $this->convertSwooleRequest($swooleRequest);
+        $request = Request::createFromSwoole($swooleRequest);
 
         // Handle request through application
         $response = $this->app->handle($request);
@@ -93,30 +93,6 @@ class SwooleServer implements Server
         }
 
         $swooleResponse->end($response->getContent());
-    }
-
-    /**
-     * Convert Swoole request to Witals Request
-     */
-    protected function convertSwooleRequest(SwooleRequest $swooleRequest): Request
-    {
-        $get = $swooleRequest->get ?? [];
-        $post = $swooleRequest->post ?? [];
-        $cookie = $swooleRequest->cookie ?? [];
-        $files = $swooleRequest->files ?? [];
-        $server = $swooleRequest->server ?? [];
-        $headers = $swooleRequest->header ?? [];
-
-        // Merge headers into server array
-        foreach ($headers as $name => $value) {
-            $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-            $server[$key] = $value;
-        }
-
-        // Get raw body
-        $content = $swooleRequest->rawContent() ?? '';
-
-        return new Request($get, $post, [], $cookie, $files, $server, $content);
     }
 
     /**

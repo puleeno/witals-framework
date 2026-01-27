@@ -93,6 +93,35 @@ class Request
         );
     }
 
+    /**
+     * Create request from Swoole/OpenSwoole request
+     */
+    public static function createFromSwoole(mixed $swooleRequest): self
+    {
+        $headers = $swooleRequest->header ?? [];
+        $server = $swooleRequest->server ?? [];
+
+        // In Swoole, headers are already available in $header but often needed in $server for compatibility
+        foreach ($headers as $name => $value) {
+            $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+            if (!isset($server[$key])) {
+                $server[$key] = $value;
+            }
+        }
+
+        return new self(
+            method: strtoupper($server['request_method'] ?? 'GET'),
+            uri: $server['request_uri'] ?? '/',
+            headers: $headers,
+            query: $swooleRequest->get ?? [],
+            post: $swooleRequest->post ?? [],
+            files: $swooleRequest->files ?? [],
+            server: $server,
+            cookies: $swooleRequest->cookie ?? [],
+            body: $swooleRequest->rawContent() ?: ''
+        );
+    }
+
     public function method(): string
     {
         return $this->method;

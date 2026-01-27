@@ -81,7 +81,7 @@ class OpenSwooleServer implements Server
     protected function handleRequest(OpenSwooleRequest $openswooleRequest, OpenSwooleResponse $openswooleResponse): void
     {
         // Convert OpenSwoole request to Witals Request
-        $request = $this->convertOpenSwooleRequest($openswooleRequest);
+        $request = Request::createFromSwoole($openswooleRequest);
 
         // Handle request through application
         $response = $this->app->handle($request);
@@ -99,30 +99,6 @@ class OpenSwooleServer implements Server
         }
 
         $openswooleResponse->end($response->getContent());
-    }
-
-    /**
-     * Convert OpenSwoole request to Witals Request
-     */
-    protected function convertOpenSwooleRequest(OpenSwooleRequest $openswooleRequest): Request
-    {
-        $get = $openswooleRequest->get ?? [];
-        $post = $openswooleRequest->post ?? [];
-        $cookie = $openswooleRequest->cookie ?? [];
-        $files = $openswooleRequest->files ?? [];
-        $server = $openswooleRequest->server ?? [];
-        $headers = $openswooleRequest->header ?? [];
-
-        // Merge headers into server array
-        foreach ($headers as $name => $value) {
-            $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-            $server[$key] = $value;
-        }
-
-        // Get raw body
-        $content = $openswooleRequest->rawContent() ?? '';
-
-        return new Request($get, $post, [], $cookie, $files, $server, $content);
     }
 
     /**
