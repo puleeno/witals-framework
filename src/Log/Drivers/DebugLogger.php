@@ -13,11 +13,35 @@ use Stringable;
  */
 class DebugLogger extends AbstractLogger
 {
+    protected int $minLevel = 100;
+
+    protected static array $levels = [
+        'debug'     => 100,
+        'info'      => 200,
+        'notice'    => 250,
+        'warning'   => 300,
+        'error'     => 400,
+        'critical'  => 500,
+        'alert'     => 550,
+        'emergency' => 600,
+    ];
+
+    public function __construct(string|int $minLevel = 'debug')
+    {
+        $this->minLevel = is_int($minLevel) ? $minLevel : (self::$levels[strtolower($minLevel)] ?? 100);
+    }
+
     /**
      * Log to stderr for immediate visibility in CLI workers
      */
     public function log($level, string|Stringable $message, array $context = []): void
     {
+        $levelValue = self::$levels[strtolower((string)$level)] ?? 100;
+
+        if ($levelValue < $this->minLevel) {
+            return;
+        }
+
         $colors = [
             'emergency' => "\033[41;37m", // Red background
             'alert'     => "\033[41;37m",

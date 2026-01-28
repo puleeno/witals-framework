@@ -88,6 +88,7 @@ class LogManager extends AbstractLogger
     {
         $path = $config['path'] ?? '/home/puleeno/Projects/witals.com/storage/logs/witals.log';
         $buffered = $config['buffered'] ?? true;
+        $level = $config['level'] ?? 'debug';
         
         $formatter = $this->resolveFormatter($config['formatter'] ?? 'line');
 
@@ -97,7 +98,7 @@ class LogManager extends AbstractLogger
             @mkdir($dir, 0755, true);
         }
 
-        return new Drivers\StandardLogger($path, $buffered, $formatter);
+        return new Drivers\StandardLogger($path, $buffered, $formatter, $level);
     }
 
     /**
@@ -105,7 +106,8 @@ class LogManager extends AbstractLogger
      */
     protected function createDebugDriver(array $config): LoggerInterface
     {
-        return new Drivers\DebugLogger();
+        $level = $config['level'] ?? 'debug';
+        return new Drivers\DebugLogger($level);
     }
 
     /**

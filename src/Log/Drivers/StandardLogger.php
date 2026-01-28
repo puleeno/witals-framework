@@ -20,15 +20,29 @@ class StandardLogger extends AbstractLogger
     protected bool $buffered = true;
     protected FormatterInterface $formatter;
     protected array $processors = [];
+    protected int $minLevel = 100;
+
+    protected static array $levels = [
+        'debug'     => 100,
+        'info'      => 200,
+        'notice'    => 250,
+        'warning'   => 300,
+        'error'     => 400,
+        'critical'  => 500,
+        'alert'     => 550,
+        'emergency' => 600,
+    ];
 
     public function __construct(
         string $path, 
         bool $buffered = true, 
-        ?FormatterInterface $formatter = null
+        ?FormatterInterface $formatter = null,
+        string|int $minLevel = 'debug'
     ) {
         $this->path = $path;
         $this->buffered = $buffered;
         $this->formatter = $formatter ?: new LineFormatter();
+        $this->minLevel = is_int($minLevel) ? $minLevel : (self::$levels[strtolower($minLevel)] ?? 100);
     }
 
     /**
@@ -45,6 +59,12 @@ class StandardLogger extends AbstractLogger
      */
     public function log($level, string|Stringable $message, array $context = []): void
     {
+        $levelValue = self::$levels[strtolower((string)$level)] ?? 100;
+        
+        if ($levelValue < $this->minLevel) {
+            return;
+        }
+
         // 1. Apply Processors
         $record = [
             'level' => (string)$level,
