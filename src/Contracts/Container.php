@@ -22,6 +22,11 @@ interface Container
     public function instance(string $abstract, mixed $instance): void;
 
     /**
+     * "Extend" an abstract type in the container.
+     */
+    public function extend(string $abstract, \Closure $closure): void;
+
+    /**
      * Resolve the given type from the container.
      *
      * @return mixed

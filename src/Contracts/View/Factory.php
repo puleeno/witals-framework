@@ -52,4 +52,9 @@ interface Factory
      * @return void
      */
     public function addNamespace(string $namespace, string|array $hints): void;
+
+    /**
+     * Register a view engine.
+     */
+    public function registerEngine(string $extension, \Witals\Framework\Contracts\View\Engine $engine): void;
 }
