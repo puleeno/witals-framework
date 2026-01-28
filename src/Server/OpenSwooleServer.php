@@ -41,6 +41,7 @@ class OpenSwooleServer implements Server
             
         $this->options = array_merge([
             'worker_num' => $cpuNum * 2,
+            'task_worker_num' => $cpuNum, // Enable task workers
             'enable_coroutine' => true,
             'max_coroutine' => 100000,
         ], $options);
@@ -57,6 +58,9 @@ class OpenSwooleServer implements Server
         $server = new OpenSwooleHttpServer($this->host, $this->port);
         $server->set($this->options);
 
+        // Bind server to container for shared access
+        $this->app->instance('swoole.server', $server);
+
         // Worker start event - boot application once per worker
         $server->on('workerStart', function (OpenSwooleHttpServer $server, int $workerId) {
             echo "Worker #{$workerId} started\n";
@@ -66,6 +70,19 @@ class OpenSwooleServer implements Server
         // Request event - handle each request
         $server->on('request', function (OpenSwooleRequest $openswooleRequest, OpenSwooleResponse $openswooleResponse) {
             $this->handleRequest($openswooleRequest, $openswooleResponse);
+        });
+
+        // Task event - handle async tasks (Actions)
+        $server->on('task', function (OpenSwooleHttpServer $server, $taskId, $srcWorkerId, $data) {
+            if (isset($data['type']) && $data['type'] === 'hook_action') {
+                $this->app->make(\Witals\Framework\Hooks\HookManager::class)
+                    ->executeDispatchedAction($data['hook_data'], $data['args']);
+            }
+            return "Task {$taskId} finished";
+        });
+
+        $server->on('finish', function (OpenSwooleHttpServer $server, $taskId, $data) {
+            // Task finished
         });
 
         echo "OpenSwoole HTTP server running on http://{$this->host}:{$this->port}\n";

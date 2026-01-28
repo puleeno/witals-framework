@@ -228,10 +228,15 @@ class Container implements ContainerContract
     {
         $results = [];
 
-        foreach ($dependencies as $dependency) {
-            // 1. If parameter is manually provided.
+        foreach ($dependencies as $index => $dependency) {
+            // 1. If parameter is manually provided by name or position.
             if (array_key_exists($dependency->name, $parameters)) {
                 $results[] = $parameters[$dependency->name];
+                continue;
+            }
+
+            if (array_key_exists($index, $parameters)) {
+                $results[] = $parameters[$index];
                 continue;
             }
 
@@ -245,8 +250,9 @@ class Container implements ContainerContract
                     continue;
                 }
 
-                $className = $dependency->getDeclaringClass()->getName();
-                throw new Exception("Unresolvable dependency [{$dependency->name}] in class {$className}");
+                $declaringClass = $dependency->getDeclaringClass();
+                $name = $declaringClass ? $declaringClass->getName() : 'Closure/Function';
+                throw new \Exception("Unresolvable dependency [{$dependency->name}] in {$name}");
             }
 
             // 3. Resolve the class dependency.

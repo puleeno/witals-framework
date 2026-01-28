@@ -32,6 +32,7 @@ class Application extends Container
     protected ?LifecycleManager $lifecycle = null;
     protected ?ViewFactory $view = null;
     protected bool $booted = false;
+    protected array $terminatingCallbacks = [];
 
     public function __construct(string $basePath, ?RuntimeType $runtime = null)
     {
@@ -314,19 +315,28 @@ class Application extends Container
             $this->make(\Witals\Framework\Contracts\Http\Kernel::class)
         );
 
-        // 3. Use runScope to ensure request isolation
-        // Any service resolved during this closure (that wasn't already resolved)
-        // will be automatically cleaned up when the closure ends.
         return $this->runScope(
             [Request::class => $request],
             fn () => $handler->handle($request)
         );
     }
 
+    /**
+     * Register a terminating callback.
+     */
+    public function terminating(callable $callback): void
+    {
+        $this->terminatingCallbacks[] = $callback;
+    }
+
+    /**
+     * Terminate the application.
+     */
     public function terminate(Request $request, Response $response): void
     {
-        // Lifecycle: Terminate (traditional mode only)
-        if (!$this->isLongRunning()) {
+        $this->callTerminatingCallbacks();
+
+        if ($this->isLongRunning()) {
             $this->lifecycle()->onTerminate();
         }
 
@@ -339,17 +349,27 @@ class Application extends Container
     public function afterRequest(Request $request, Response $response): void
     {
         if ($this->isLongRunning()) {
-            // Note: Instance cleanup is handled by runScope() in handle()
-
+            $this->callTerminatingCallbacks();
+            
             // Clear request-scoped state in manager
             if ($this->stateManager && method_exists($this->stateManager, 'afterRequest')) {
                 $this->stateManager->afterRequest();
             }
 
             $this->flushLogs();
-
-            // Run garbage collection
             gc_collect_cycles();
+        }
+    }
+
+    protected function callTerminatingCallbacks(): void
+    {
+        foreach ($this->terminatingCallbacks as $callback) {
+            $this->call($callback);
+        }
+        
+        // Clear callbacks for next request if long-running
+        if ($this->isLongRunning()) {
+            $this->terminatingCallbacks = [];
         }
     }
 
