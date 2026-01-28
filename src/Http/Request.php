@@ -167,6 +167,11 @@ class Request
         return $this->headers[$key] ?? $default;
     }
 
+    public function cookie(string $key, mixed $default = null): mixed
+    {
+        return $this->cookies[$key] ?? $default;
+    }
+
     public function body(): ?string
     {
         return $this->body;

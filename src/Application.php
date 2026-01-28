@@ -60,6 +60,7 @@ class Application extends Container
 
         $this->instance('app', $this);
         $this->instance(self::class, $this);
+        $this->instance(\Witals\Framework\Contracts\Container::class, $this);
 
         // Initialize core services
         $this->initializeView();
