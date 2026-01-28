@@ -14,6 +14,10 @@ use Witals\Framework\Contracts\LifecycleManager;
 use Witals\Framework\Lifecycle\LifecycleFactory;
 use Witals\Framework\Contracts\View\Factory as ViewFactory;
 use Witals\Framework\View\ViewManager;
+use Witals\Framework\Contracts\Exceptions\ExceptionHandlerInterface;
+use Witals\Framework\Exceptions\Handler as ExceptionHandler;
+use Witals\Framework\Bootstrap\HandleExceptions;
+use Throwable;
 
 /**
  * Main Application Class
@@ -36,6 +40,9 @@ class Application extends Container
 
         $this->registerBaseBindings();
         $this->registerCoreContainerAliases();
+        $this->bootstrapWith([
+            HandleExceptions::class,
+        ]);
     }
 
     /**
@@ -50,6 +57,22 @@ class Application extends Container
 
         // Initialize core services
         $this->initializeView();
+        
+        $this->singleton(ExceptionHandlerInterface::class, function ($app) {
+            return new ExceptionHandler($app);
+        });
+        
+        $this->alias(ExceptionHandlerInterface::class, ExceptionHandler::class);
+    }
+
+    /**
+     * Run the given array of bootstrap classes.
+     */
+    public function bootstrapWith(array $bootstrappers): void
+    {
+        foreach ($bootstrappers as $bootstrapper) {
+            $this->make($bootstrapper)->bootstrap($this);
+        }
     }
 
     /**
@@ -68,6 +91,14 @@ class Application extends Container
         $this->bind($alias, function ($app) use ($abstract) {
             return $app->make($abstract);
         });
+    }
+
+    /**
+     * Register a custom exception handler.
+     */
+    public function withExceptions(string|ExceptionHandlerInterface $handler): void
+    {
+        $this->singleton(ExceptionHandlerInterface::class, $handler);
     }
 
     /**
@@ -252,6 +283,15 @@ class Application extends Container
     }
 
     /**
+     * Get the destination for PHP error logging.
+     * Framework uses this early in the bootstrap process.
+     */
+    public function getErrorLogPath(): string
+    {
+        return $this->basePath('storage/logs/witals.log');
+    }
+
+    /**
      * Register configured service providers
      */
     public function registerConfiguredProviders(): void
@@ -327,22 +367,17 @@ class Application extends Container
     }
 
     /**
-     * Handle uncaught exceptions
+     * Handle an uncaught exception.
      */
-    protected function handleException(\Throwable $e): Response
+    public function handleException(Throwable $e): void
     {
-        $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
-
-        return new Response(
-            json_encode([
-                'error' => true,
-                'message' => $e->getMessage(),
-                'file' => $this->isRunningUnitTests() ? $e->getFile() : null,
-                'line' => $this->isRunningUnitTests() ? $e->getLine() : null,
-            ]),
-            $statusCode,
-            ['Content-Type' => 'application/json']
-        );
+        $handler = $this->make(ExceptionHandlerInterface::class);
+        
+        $handler->report($e);
+        
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            $handler->render($e)->send();
+        }
     }
 
     /**
