@@ -33,6 +33,11 @@ class Application extends Container
     protected ?ViewFactory $view = null;
     protected bool $booted = false;
     protected array $terminatingCallbacks = [];
+    protected array $bootingCallbacks = [];
+    protected array $bootedCallbacks = [];
+    protected array $beforeRequestCallbacks = [];
+    protected array $bootstrappers = [];
+    protected array $hasBootstrapped = [];
 
     public function __construct(string $basePath, ?RuntimeType $runtime = null)
     {
@@ -72,8 +77,29 @@ class Application extends Container
     public function bootstrapWith(array $bootstrappers): void
     {
         foreach ($bootstrappers as $bootstrapper) {
+            if (isset($this->hasBootstrapped[$bootstrapper])) {
+                continue;
+            }
+
             $this->make($bootstrapper)->bootstrap($this);
+            $this->hasBootstrapped[$bootstrapper] = true;
         }
+    }
+
+    /**
+     * Add a bootstrapper to the application.
+     */
+    public function addBootstrapper(string $bootstrapper): void
+    {
+        $this->bootstrappers[] = $bootstrapper;
+    }
+
+    /**
+     * Run all registered bootstrappers.
+     */
+    public function bootstrap(): void
+    {
+        $this->bootstrapWith($this->bootstrappers);
     }
 
     /**
@@ -215,8 +241,51 @@ class Application extends Container
             return;
         }
 
+        foreach ($this->bootingCallbacks as $callback) {
+            $this->call($callback);
+        }
+
         $this->lifecycle()->onBoot();
+        
         $this->booted = true;
+
+        foreach ($this->bootedCallbacks as $callback) {
+            $this->call($callback);
+        }
+    }
+
+    /**
+     * Register a booting callback.
+     */
+    public function booting(callable $callback): void
+    {
+        $this->bootingCallbacks[] = $callback;
+    }
+
+    /**
+     * Register a booted callback.
+     */
+    public function booted(callable $callback): void
+    {
+        $this->bootedCallbacks[] = $callback;
+    }
+
+    /**
+     * Register a before request callback.
+     */
+    public function beforeRequest(callable $callback): void
+    {
+        $this->beforeRequestCallbacks[] = $callback;
+    }
+
+    /**
+     * Call before request callbacks.
+     */
+    public function callBeforeRequestCallbacks(Request $request): void
+    {
+        foreach ($this->beforeRequestCallbacks as $callback) {
+            $this->call($callback, ['request' => $request]);
+        }
     }
 
     /**
@@ -309,7 +378,13 @@ class Application extends Container
         // 1. Ensure application is booted
         $this->boot();
 
-        // 2. Create the RequestHandler (which manages init, execute, respond, shutdown)
+        // 2. Lifecycle onRequestStart
+        $this->lifecycle()->onRequestStart($request);
+
+        // 3. Trigger beforeRequest callbacks
+        $this->callBeforeRequestCallbacks($request);
+
+        // 4. Create the RequestHandler (which manages init, execute, respond, shutdown)
         $handler = new \Witals\Framework\Http\RequestHandler(
             $this,
             $this->make(\Witals\Framework\Contracts\Http\Kernel::class)
