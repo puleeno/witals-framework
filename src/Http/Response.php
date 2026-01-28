@@ -99,6 +99,11 @@ class Response
         return $this->headers;
     }
 
+    public function getHeader(string $name, mixed $default = null): mixed
+    {
+        return $this->headers[$name] ?? $default;
+    }
+
     public function withHeader(string $name, string $value): self
     {
         $clone = clone $this;
