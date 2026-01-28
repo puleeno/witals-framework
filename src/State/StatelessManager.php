@@ -62,6 +62,18 @@ class StatelessManager implements StateManager
     }
 
     /**
+     * Get statistics about state usage
+     */
+    public function getStats(): array
+    {
+        return [
+            'request_state_count' => count($this->state),
+            'persistent_state_count' => 0,
+            'total_memory' => memory_get_usage(true),
+        ];
+    }
+
+    /**
      * Destructor - automatically clears state
      * In stateless mode, state is cleared after each request
      */

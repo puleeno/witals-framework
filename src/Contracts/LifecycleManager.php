@@ -50,4 +50,11 @@ interface LifecycleManager
      * Check if this is a long-running lifecycle
      */
     public function isLongRunning(): bool;
+
+    /**
+     * Get statistics about the worker process
+     * 
+     * @return array{uptime: float, requests_handled: int, memory_usage: int, ...}
+     */
+    public function getWorkerStats(): array;
 }

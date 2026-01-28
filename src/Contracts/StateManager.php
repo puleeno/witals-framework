@@ -56,4 +56,11 @@ interface StateManager
      * (In stateless mode, this may behave like get())
      */
     public function getPersistent(string $key, mixed $default = null): mixed;
+
+    /**
+     * Get statistics about state usage
+     * 
+     * @return array{request_state_count: int, persistent_state_count: int, memory: int, ...}
+     */
+    public function getStats(): array;
 }

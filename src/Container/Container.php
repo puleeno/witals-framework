@@ -60,6 +60,32 @@ class Container implements ContainerContract
     }
 
     /**
+     * "Extend" an abstract type in the container.
+     *
+     * @param string $abstract
+     * @param \Closure $closure
+     * @return void
+     */
+    public function extend(string $abstract, \Closure $closure): void
+    {
+        if (isset($this->instances[$abstract])) {
+            $this->instances[$abstract] = $closure($this->instances[$abstract], $this);
+
+            return;
+        }
+
+        if (!isset($this->bindings[$abstract])) {
+            throw new Exception("Cannot extend abstract [{$abstract}] because it has not been bound.");
+        }
+
+        $concrete = $this->bindings[$abstract]['concrete'];
+
+        $this->bind($abstract, function ($container) use ($abstract, $concrete, $closure) {
+            return $closure($container->build($concrete), $container);
+        }, $this->isShared($abstract));
+    }
+
+    /**
      * Register a shared binding in the container.
      */
     public function singleton(string $abstract, $concrete = null): void
@@ -116,6 +142,22 @@ class Container implements ContainerContract
         }
 
         return $object;
+    }
+
+    public function call(callable $callback, array $parameters = [])
+    {
+        if ($callback instanceof Closure) {
+            $reflection = new \ReflectionFunction($callback);
+        } elseif (is_array($callback)) {
+            $reflection = new \ReflectionMethod($callback[0], $callback[1]);
+        } else {
+            $reflection = new \ReflectionMethod($callback, '__invoke');
+        }
+
+        $dependencies = $reflection->getParameters();
+        $instances = $this->resolveDependencies($dependencies, $parameters);
+
+        return call_user_func_array($callback, $instances);
     }
 
     /**

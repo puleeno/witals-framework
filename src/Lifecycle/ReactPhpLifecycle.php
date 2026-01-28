@@ -54,4 +54,17 @@ class ReactPhpLifecycle implements LifecycleManager
     {
         return true;
     }
+
+    /**
+     * Get statistics about the worker process
+     */
+    public function getWorkerStats(): array
+    {
+        return [
+            'uptime' => defined('WITALS_START') ? microtime(true) - WITALS_START : 0.0,
+            'requests_handled' => -1, // Needs implementation to track request count
+            'memory_usage' => memory_get_usage(true),
+            'memory_peak' => memory_get_peak_usage(true),
+        ];
+    }
 }

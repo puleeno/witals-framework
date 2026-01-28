@@ -119,4 +119,17 @@ class TraditionalLifecycle implements LifecycleManager
         // Flush logs
         // Send any pending data
     }
+
+    /**
+     * Get statistics about the worker process
+     */
+    public function getWorkerStats(): array
+    {
+        return [
+            'uptime' => defined('WITALS_START') ? microtime(true) - WITALS_START : (microtime(true) - $this->bootTime),
+            'requests_handled' => 1, // Traditional mode is always 1 request per process
+            'memory_usage' => memory_get_usage(true),
+            'memory_peak' => memory_get_peak_usage(true),
+        ];
+    }
 }

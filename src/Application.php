@@ -12,6 +12,8 @@ use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\State\StateManagerFactory;
 use Witals\Framework\Contracts\LifecycleManager;
 use Witals\Framework\Lifecycle\LifecycleFactory;
+use Witals\Framework\Contracts\View\Factory as ViewFactory;
+use Witals\Framework\View\ViewManager;
 
 /**
  * Main Application Class
@@ -24,6 +26,7 @@ class Application extends Container
     protected array $providers = [];
     protected ?StateManager $stateManager = null;
     protected ?LifecycleManager $lifecycle = null;
+    protected ?ViewFactory $view = null;
     protected bool $booted = false;
 
     public function __construct(string $basePath, ?RuntimeType $runtime = null)
@@ -44,6 +47,9 @@ class Application extends Container
 
         $this->instance('app', $this);
         $this->instance(self::class, $this);
+
+        // Initialize core services
+        $this->initializeView();
     }
 
     /**
@@ -110,6 +116,14 @@ class Application extends Container
     }
 
     /**
+     * Set RoadRunner mode
+     */
+    public function setRoadRunnerMode(bool $active): void
+    {
+        $this->setRuntime($active ? RuntimeType::ROADRUNNER : RuntimeType::TRADITIONAL);
+    }
+
+    /**
      * Initialize lifecycle manager based on environment
      */
     protected function initializeLifecycle(): void
@@ -132,6 +146,32 @@ class Application extends Container
         }
 
         return $this->lifecycle;
+    }
+
+    /**
+     * Initialize view manager
+     */
+    protected function initializeView(): void
+    {
+        if ($this->view === null) {
+            $this->view = new ViewManager([$this->basePath('resources/views')]);
+
+            // Bind to container
+            $this->instance(ViewFactory::class, $this->view);
+            $this->instance('view', $this->view);
+        }
+    }
+
+    /**
+     * Get view factory instance
+     */
+    public function view(): ViewFactory
+    {
+        if ($this->view === null) {
+            $this->initializeView();
+        }
+
+        return $this->view;
     }
 
     /**
@@ -243,15 +283,14 @@ class Application extends Container
         );
     }
 
-    /**
-     * Perform any final actions for the request lifecycle
-     */
     public function terminate(Request $request, Response $response): void
     {
         // Lifecycle: Terminate (traditional mode only)
         if (!$this->isLongRunning()) {
             $this->lifecycle()->onTerminate();
         }
+
+        $this->flushLogs();
     }
 
     /**
@@ -267,8 +306,23 @@ class Application extends Container
                 $this->stateManager->afterRequest();
             }
 
+            $this->flushLogs();
+
             // Run garbage collection
             gc_collect_cycles();
+        }
+    }
+
+    /**
+     * Flush logs if the logger supports it.
+     */
+    protected function flushLogs(): void
+    {
+        if ($this->has(\Psr\Log\LoggerInterface::class)) {
+            $logger = $this->make(\Psr\Log\LoggerInterface::class);
+            if (method_exists($logger, 'flush')) {
+                $logger->flush();
+            }
         }
     }
 

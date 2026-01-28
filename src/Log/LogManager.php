@@ -147,6 +147,11 @@ class LogManager extends AbstractLogger
         $this->driver()->log($level, $message, $context);
     }
 
+    public function __destruct()
+    {
+        $this->flush();
+    }
+
     /**
      * Dynamically call the default driver instance.
      */
