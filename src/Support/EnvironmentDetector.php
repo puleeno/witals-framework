@@ -24,7 +24,10 @@ class EnvironmentDetector
      */
     public function isModern(): bool
     {
-        return $this->app->isLongRunning() && extension_loaded('swoole');
+        // Only consider Swoole/OpenSwoole runtimes as "Modern" for Shared Memory Table support.
+        // RoadRunner, while long-running, doesn't support Swoole Tables across workers.
+        return ($this->app->isSwoole() || $this->app->isOpenSwoole()) && 
+               (extension_loaded('swoole') || extension_loaded('openswoole'));
     }
 
     /**
