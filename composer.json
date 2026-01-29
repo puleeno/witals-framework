@@ -15,7 +15,8 @@
     ],
     "require": {
         "php": "^8.1",
-        "psr/log": "^3.0"
+        "psr/log": "^3.0",
+        "paragonie/paseto": "dev-master"
     },
     "suggest": {
         "react/http": "Required for ReactPHP runtime support (^1.9)",

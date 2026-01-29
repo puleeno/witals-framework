@@ -32,10 +32,45 @@ class AuthServiceProvider
 
     public function register(): void
     {
-        // 1. Default Token Storage (Array)
-        // Users should override this in their AppServiceProvider for Database/Redis storage
+        // 1. Token Storage Registration (Driver-based)
         if (!$this->app->has(TokenStorageInterface::class)) {
-            $this->app->singleton(TokenStorageInterface::class, ArrayTokenStorage::class);
+            $this->app->singleton(TokenStorageInterface::class, function ($app) {
+                // Get driver from config, default to 'database'
+                $driver = env('AUTH_TOKEN_DRIVER', 'database');
+
+                switch ($driver) {
+                    case 'redis':
+                        // Ensure Redis service is available or create a new connection
+                        // This assumes the app container has a 'redis' binding or we construct it
+                        if ($app->has('redis')) {
+                            return new \Witals\Framework\Auth\TokenStorage\RedisTokenStorage($app->make('redis'));
+                        }
+                        // Fallback simple Redis connection if not bound
+                        $redis = new \Redis();
+                        $redis->connect(env('REDIS_HOST', '127.0.0.1'), (int)env('REDIS_PORT', 6379));
+                        return new \Witals\Framework\Auth\TokenStorage\RedisTokenStorage($redis);
+
+                    case 'file':
+                        return new \Witals\Framework\Auth\TokenStorage\FileTokenStorage(
+                            $app->basePath('storage/framework/tokens')
+                        );
+
+                    case 'paseto':
+                        // Needs APP_KEY or separate PASETO_KEY
+                        $key = env('PASETO_KEY', env('APP_KEY', 'base64:randomkEyChangeMeINPROD1234567890'));
+                        // Strip base64: prefix if present
+                        if (str_starts_with($key, 'base64:')) {
+                            $key = base64_decode(substr($key, 7));
+                        }
+                        return new \Witals\Framework\Auth\TokenStorage\PasetoTokenStorage($key);
+
+                    case 'database':
+                    default:
+                        return new \Witals\Framework\Auth\TokenStorage\DatabaseTokenStorage(
+                            $app->make(\Cycle\Database\DatabaseProviderInterface::class)
+                        );
+                }
+            });
         }
 
         // 2. Default Http Transport (Cookie)

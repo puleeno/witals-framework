@@ -49,8 +49,11 @@ class AuthMiddleware
         // to any service requested within the processing of this request.
         
         // We assume the container has a 'runScope' method (compat with Witals Container)
+        // 5. Run next handler within an IoC Scope
+        $response = null;
+
         if (method_exists($this->container, 'runScope')) {
-            return $this->container->runScope(
+            $response = $this->container->runScope(
                 [
                     AuthContextInterface::class => $authContext
                 ],
@@ -58,12 +61,30 @@ class AuthMiddleware
                     return $next($request);
                 }
             );
+        } else {
+            $response = $next($request);
         }
 
-        // Fallback if no scoping is available (e.g. standard PHP-FPM without explicit scoping)
-        // Check if we can bind it temporarily
-        // Ideally we should NOT do this in RoadRunner/Swoole without scoping
-        // But for safety, we'll try to use the passed context.
-        return $next($request);
+        // 6. Output Cookie Handling
+        // Persist token to client via Transport (Cookie)
+        if ($authContext->getToken()) {
+            return $this->httpTransport->commitToken(
+                $request, 
+                $response, 
+                $authContext->getToken(), 
+                $authContext->getToken()->getExpiresAt()
+            );
+        } elseif ($authContext->isClosed()) {
+            // Remove cookie on logout
+            $dummy = new class implements \Witals\Framework\Contracts\Auth\TokenInterface {
+                 public function getID(): string { return ''; }
+                 public function getPayload(): array { return []; }
+                 public function getExpiresAt(): ?\DateTimeInterface { return null; }
+            };
+            return $this->httpTransport->removeToken($request, $response, $dummy);
+        }
+
+        return $response;
     }
 }
+

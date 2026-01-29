@@ -50,6 +50,16 @@ class Response
     }
 
     /**
+     * Create a redirect response
+     */
+    public static function redirect(string $url, int $statusCode = 302, array $headers = []): self
+    {
+        $headers['Location'] = $url;
+        return new self('', $statusCode, $headers);
+    }
+
+
+    /**
      * Send response (traditional web server)
      */
     public function send(): void
