@@ -34,8 +34,8 @@ class SwooleServer implements Server
         $this->host = $host;
         $this->port = $port;
         $this->options = array_merge([
-            'worker_num' => swoole_cpu_num() * 2,
-            'task_worker_num' => swoole_cpu_num(), // Enable task workers
+            'worker_num' => (int)env('SWOOLE_WORKERS', 4),
+            'task_worker_num' => (int)env('SWOOLE_TASK_WORKERS', 2),
             'enable_coroutine' => true,
             'max_coroutine' => 100000,
         ], $options);

@@ -80,5 +80,16 @@ class AuthServiceProvider
                 return new CookieTransport('token');
             });
         }
+
+        // 3. Auth Context (Scoped per request)
+        if (!$this->app->has(\Witals\Framework\Contracts\Auth\AuthContextInterface::class)) {
+            $this->app->singleton(\Witals\Framework\Contracts\Auth\AuthContextInterface::class, function ($app) {
+                return new \Witals\Framework\Auth\AuthContext(
+                    $app->has(\Witals\Framework\Contracts\Auth\ActorProviderInterface::class)
+                        ? $app->make(\Witals\Framework\Contracts\Auth\ActorProviderInterface::class)
+                        : null
+                );
+            });
+        }
     }
 }
