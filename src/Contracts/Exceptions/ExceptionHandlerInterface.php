@@ -21,7 +21,8 @@ interface ExceptionHandlerInterface
      * Render an exception into an HTTP response.
      *
      * @param Throwable $e
+     * @param \Witals\Framework\Http\Request|null $request
      * @return Response
      */
-    public function render(Throwable $e): Response;
+    public function render(Throwable $e, ?\Witals\Framework\Http\Request $request = null): Response;
 }

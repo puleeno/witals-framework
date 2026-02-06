@@ -108,18 +108,8 @@ class RequestHandler
      */
     protected function handleException(\Throwable $e, Request $request): Response
     {
-        // Log error
-        error_log(sprintf(
-            "[RequestHandler Error] %s in %s:%d",
-            $e->getMessage(),
-            $e->getFile(),
-            $e->getLine()
-        ));
-
-        return Response::json([
-            'error' => true,
-            'message' => $e->getMessage(),
-            'trace' => $this->app->isRunningUnitTests() ? $e->getTrace() : null,
-        ], 500);
+        $handler = $this->app->make(\Witals\Framework\Contracts\Exceptions\ExceptionHandlerInterface::class);
+        $handler->report($e);
+        return $handler->render($e, $request);
     }
 }

@@ -38,7 +38,7 @@ class Handler implements ExceptionHandlerInterface
     /**
      * Render an exception into an HTTP response.
      */
-    public function render(Throwable $e): Response
+    public function render(Throwable $e, ?\Witals\Framework\Http\Request $request = null): Response
     {
         $debug = false;
         try {
@@ -51,6 +51,19 @@ class Handler implements ExceptionHandlerInterface
 
         $status = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
 
+        // Determine if we should return JSON
+        $wantsJson = $request?->wantsJson() ?? false;
+
+        if ($wantsJson) {
+            return $this->renderJsonResponse($e, $status, $debug);
+        }
+
+        // Default to HTML if not explicitly asking for JSON
+        return $this->renderHtmlResponse($e, $status, $debug);
+    }
+
+    protected function renderJsonResponse(Throwable $e, int $status, bool $debug): Response
+    {
         $content = [
             'message' => $e->getMessage(),
         ];
@@ -67,5 +80,33 @@ class Handler implements ExceptionHandlerInterface
             $status,
             ['Content-Type' => 'application/json']
         );
+    }
+
+    protected function renderHtmlResponse(Throwable $e, int $status, bool $debug): Response
+    {
+        $viewPath = __DIR__ . '/resources/error.php';
+
+        if (!file_exists($viewPath)) {
+            // Fallback to simple text if template missing
+            return new Response($e->getMessage(), $status, ['Content-Type' => 'text/plain']);
+        }
+
+        $data = [
+            'message' => $e->getMessage(),
+            'status' => $status,
+            'debug' => $debug,
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTrace(),
+            'exception' => get_class($e),
+        ];
+
+        // Render template
+        ob_start();
+        extract($data);
+        include $viewPath;
+        $html = ob_get_clean();
+
+        return new Response($html, $status, ['Content-Type' => 'text/html']);
     }
 }

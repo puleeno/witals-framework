@@ -182,8 +182,15 @@ class Request
         return $this->method === strtoupper($method);
     }
 
-    public function isJson(): bool
+    public function wantsJson(): bool
     {
-        return str_contains($this->header('Content-Type', ''), 'application/json');
+        $acceptable = $this->header('Accept', '');
+        return str_contains($acceptable, '/json') || str_contains($acceptable, '+json');
+    }
+
+    public function expectsHtml(): bool
+    {
+        $acceptable = $this->header('Accept', '');
+        return str_contains($acceptable, 'text/html') || $acceptable === '*/*';
     }
 }

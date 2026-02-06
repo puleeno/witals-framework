@@ -471,8 +471,17 @@ class Application extends Container
         
         $handler->report($e);
         
+        $request = null;
+        try {
+            if ($this->has(Request::class)) {
+                $request = $this->make(Request::class);
+            }
+        } catch (Throwable) {
+            // Ignore if request cannot be resolved
+        }
+
         if (PHP_SAPI !== 'cli' && !headers_sent()) {
-            $handler->render($e)->send();
+            $handler->render($e, $request)->send();
         }
     }
 
