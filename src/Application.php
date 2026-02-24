@@ -17,6 +17,8 @@ use Witals\Framework\View\ViewManager;
 use Witals\Framework\Contracts\Exceptions\ExceptionHandlerInterface;
 use Witals\Framework\Exceptions\Handler as ExceptionHandler;
 use Witals\Framework\Bootstrap\HandleExceptions;
+use Witals\Framework\Contracts\I18n\Translator as TranslatorFactory;
+use Witals\Framework\I18n\Translator;
 use Throwable;
 
 /**
@@ -32,6 +34,7 @@ class Application extends Container
     protected ?StateManager $stateManager = null;
     protected ?LifecycleManager $lifecycle = null;
     protected ?ViewFactory $view = null;
+    protected ?TranslatorFactory $translator = null;
     protected bool $booted = false;
     protected array $terminatingCallbacks = [];
     protected array $bootingCallbacks = [];
@@ -69,6 +72,8 @@ class Application extends Container
         $this->singleton(\Witals\Framework\Support\AssetManager::class, function ($app) {
             return new \Witals\Framework\Support\AssetManager($app);
         });
+
+        $this->initializeTranslator();
         
         $this->singleton(ExceptionHandlerInterface::class, function ($app) {
             return new ExceptionHandler($app);
@@ -238,6 +243,37 @@ class Application extends Container
         }
 
         return $this->view;
+    }
+
+    /**
+     * Initialize translator
+     */
+    protected function initializeTranslator(): void
+    {
+        if ($this->translator === null) {
+            $locale = getenv('APP_LOCALE') ?: 'en';
+            $paths = [
+                $this->basePath('resources/lang')
+            ];
+            
+            $this->translator = new Translator($locale, $paths);
+
+            // Bind to container
+            $this->instance(TranslatorFactory::class, $this->translator);
+            $this->instance('translator', $this->translator);
+        }
+    }
+
+    /**
+     * Get translator instance
+     */
+    public function translator(): TranslatorFactory
+    {
+        if ($this->translator === null) {
+            $this->initializeTranslator();
+        }
+
+        return $this->translator;
     }
 
     /**
