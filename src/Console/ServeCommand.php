@@ -8,18 +8,14 @@ use Witals\Framework\Application;
 use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\Server\ServerFactory;
 
-class ServeCommand
+class ServeCommand extends Command
 {
-    protected Application $app;
+    protected string $name = 'serve';
+    protected string $description = 'Start the application server';
 
-    public function __construct(Application $app)
+    public function handle(array $args): int
     {
-        $this->app = $app;
-    }
-
-    public function handle(array $argv): void
-    {
-        $options = $this->parseArguments($argv);
+        $options = $this->parseOptions($args);
         $host = $options['host'] ?? '0.0.0.0';
         $port = (int) ($options['port'] ?? 8080);
 
@@ -31,7 +27,8 @@ class ServeCommand
         $this->displayBanner($runtime, $host, $port);
 
         if ($runtime === RuntimeType::TRADITIONAL) {
-            $this->exitWithError('Traditional runtime cannot be used with serve. Use public/index.php instead.');
+            $this->error('Traditional runtime cannot be used with serve. Use public/index.php instead.');
+            return 1;
         }
 
         // Create the server using the factory
@@ -43,23 +40,8 @@ class ServeCommand
         ]);
 
         $server->start();
-    }
 
-    protected function parseArguments(array $argv): array
-    {
-        $options = [];
-        foreach ($argv as $arg) {
-            if (str_starts_with($arg, '--')) {
-                $arg = substr($arg, 2);
-                if (str_contains($arg, '=')) {
-                    [$key, $value] = explode('=', $arg, 2);
-                    $options[$key] = $value;
-                } else {
-                    $options[$arg] = true;
-                }
-            }
-        }
-        return $options;
+        return 0;
     }
 
     protected function detectRuntime(array $options): RuntimeType

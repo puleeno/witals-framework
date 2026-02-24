@@ -28,6 +28,7 @@ class Application extends Container
     protected string $basePath;
     protected RuntimeType $runtime;
     protected array $providers = [];
+    protected array $loadedProviders = [];
     protected ?StateManager $stateManager = null;
     protected ?LifecycleManager $lifecycle = null;
     protected ?ViewFactory $view = null;
@@ -70,6 +71,8 @@ class Application extends Container
         });
         
         $this->alias(ExceptionHandlerInterface::class, ExceptionHandler::class);
+        
+        $this->registerConfiguredProviders();
     }
 
     /**
@@ -248,6 +251,8 @@ class Application extends Container
 
         $this->lifecycle()->onBoot();
         
+        $this->bootProviders();
+
         $this->booted = true;
 
         foreach ($this->bootedCallbacks as $callback) {
@@ -363,12 +368,48 @@ class Application extends Container
     }
 
     /**
+     * Register a service provider with the application.
+     */
+    public function register(object|string $provider): mixed
+    {
+        if (is_string($provider)) {
+            $provider = new $provider($this);
+        }
+
+        if (array_key_exists(get_class($provider), $this->loadedProviders)) {
+            return $this->loadedProviders[get_class($provider)];
+        }
+
+        if (method_exists($provider, 'register')) {
+            $provider->register();
+        }
+
+        $this->loadedProviders[get_class($provider)] = $provider;
+
+        if ($this->booted && method_exists($provider, 'boot')) {
+            $provider->boot();
+        }
+
+        return $provider;
+    }
+
+    /**
      * Register configured service providers
      */
     public function registerConfiguredProviders(): void
     {
-        // Register your service providers here
-        // Example: $this->register(new RouteServiceProvider($this));
+        // Core providers
+        $this->register(\Witals\Framework\Console\ConsoleServiceProvider::class);
+    }
+
+    /**
+     * Boot the application's service providers.
+     */
+    protected function bootProviders(): void
+    {
+        foreach ($this->loadedProviders as $provider) {
+            $provider->boot();
+        }
     }
 
     /**
