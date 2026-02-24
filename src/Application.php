@@ -66,6 +66,10 @@ class Application extends Container
         // Initialize core services
         $this->initializeView();
         
+        $this->singleton(\Witals\Framework\Support\AssetManager::class, function ($app) {
+            return new \Witals\Framework\Support\AssetManager($app);
+        });
+        
         $this->singleton(ExceptionHandlerInterface::class, function ($app) {
             return new ExceptionHandler($app);
         });
