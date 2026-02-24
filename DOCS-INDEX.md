@@ -31,6 +31,11 @@ Welcome to the Witals Framework documentation! This framework supports multiple 
   - Performance buffering and flushing.
   - Traceability and JSON formatting.
 
+- **[docs/ASSET-MANAGER.md](docs/ASSET-MANAGER.md)** - Intelligent Asset Resolution.
+  - Context-aware rendering (external vs inline).
+  - Dependency resolution (Topological Sort).
+  - Discovery Roots & Handle Registry (WordPress compatible).
+
 ### Implementation Details
 - **[CHANGELOG-RUNTIME.md](CHANGELOG-RUNTIME.md)** - Complete changelog of runtime extensions.
 - **[IMPLEMENTATION-SUMMARY.md](IMPLEMENTATION-SUMMARY.md)** - Summary of the unified runner implementation.
