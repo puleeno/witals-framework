@@ -87,4 +87,28 @@ abstract class Command
         $options = $this->parseOptions($args);
         return $options[$name] ?? $default;
     }
+
+    public function displayHelp(): void
+    {
+        echo "Description:" . PHP_EOL;
+        echo "  " . $this->getDescription() . PHP_EOL . PHP_EOL;
+        
+        echo "Usage:" . PHP_EOL;
+        echo "  php witals " . $this->getName() . " [options] [arguments]" . PHP_EOL . PHP_EOL;
+
+        if (!empty($this->options)) {
+            echo "Options:" . PHP_EOL;
+            foreach ($this->options as $option => $desc) {
+                printf("  %-20s %s\n", $option, $desc);
+            }
+        }
+        printf("  %-20s %s\n", '-h, --help', 'Display this help message');
+
+        if (!empty($this->arguments)) {
+            echo PHP_EOL . "Arguments:" . PHP_EOL;
+            foreach ($this->arguments as $arg => $desc) {
+                printf("  %-20s %s\n", $arg, $desc);
+            }
+        }
+    }
 }

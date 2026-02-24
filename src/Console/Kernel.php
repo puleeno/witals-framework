@@ -35,6 +35,12 @@ class Kernel
             /** @var Command $command */
             $command = new $commandClass($this->app);
             if ($command->getName() === $commandName) {
+                // Check for help flag
+                if (in_array('-h', $args) || in_array('--help', $args)) {
+                    $command->displayHelp();
+                    return 0;
+                }
+
                 try {
                     return $command->handle($args);
                 } catch (Throwable $e) {

@@ -12,6 +12,14 @@ class ServeCommand extends Command
 {
     protected string $name = 'serve';
     protected string $description = 'Start the application server';
+    protected array $options = [
+        '--host' => 'The host address to bind the server to (default: 0.0.0.0)',
+        '--port' => 'The port number to listen on (default: 8080)',
+        '--reactphp' => 'Force use of ReactPHP runtime',
+        '--swoole' => 'Force use of Swoole runtime',
+        '--openswoole' => 'Force use of OpenSwoole runtime',
+        '--roadrunner' => 'Force use of RoadRunner runtime',
+    ];
 
     public function handle(array $args): int
     {
