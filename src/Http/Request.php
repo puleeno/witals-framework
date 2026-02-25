@@ -17,6 +17,7 @@ class Request
     protected array $headers;
     protected array $query;
     protected array $post;
+    protected array $attributes = [];
     protected array $files;
     protected array $server;
     protected array $cookies;
@@ -31,7 +32,8 @@ class Request
         array $files = [],
         array $server = [],
         array $cookies = [],
-        ?string $body = null
+        ?string $body = null,
+        array $attributes = []
     ) {
         $this->method = strtoupper($method);
         $this->uri = $uri;
@@ -42,6 +44,7 @@ class Request
         $this->server = $server;
         $this->cookies = $cookies;
         $this->body = $body;
+        $this->attributes = $attributes;
     }
 
     /**
@@ -192,5 +195,22 @@ class Request
     {
         $acceptable = $this->header('Accept', '');
         return str_contains($acceptable, 'text/html') || $acceptable === '*/*';
+    }
+
+    public function getAttribute(string $name, mixed $default = null): mixed
+    {
+        return $this->attributes[$name] ?? $default;
+    }
+
+    public function withAttribute(string $name, mixed $value): self
+    {
+        $new = clone $this;
+        $new->attributes[$name] = $value;
+        return $new;
+    }
+
+    public function getAttributes(): array
+    {
+        return $this->attributes;
     }
 }
