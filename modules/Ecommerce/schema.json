@@ -1,0 +1,142 @@
+{
+    "version": "1.0.0",
+    "module": "ecommerce",
+    "description": "Base Ecommerce module schemas including orders and invoices.",
+    "tables": [
+        {
+            "name": "orders",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "primary"
+                },
+                {
+                    "name": "order_number",
+                    "type": "string",
+                    "size": 64,
+                    "nullable": false
+                },
+                {
+                    "name": "customer_id",
+                    "type": "integer",
+                    "nullable": true
+                },
+                {
+                    "name": "customer_email",
+                    "type": "string",
+                    "size": 255,
+                    "nullable": true
+                },
+                {
+                    "name": "status",
+                    "type": "enum",
+                    "values": [
+                        "pending",
+                        "processing",
+                        "completed",
+                        "cancelled",
+                        "refunded"
+                    ],
+                    "default": "pending"
+                },
+                {
+                    "name": "payment_status",
+                    "type": "enum",
+                    "values": [
+                        "pending",
+                        "paid",
+                        "failed",
+                        "refunded"
+                    ],
+                    "default": "pending"
+                },
+                {
+                    "name": "payment_method",
+                    "type": "string",
+                    "size": 100,
+                    "nullable": true
+                },
+                {
+                    "name": "transaction_id",
+                    "type": "string",
+                    "size": 255,
+                    "nullable": true
+                },
+                {
+                    "name": "total",
+                    "type": "decimal",
+                    "precision": 10,
+                    "scale": 2,
+                    "default": 0
+                },
+                {
+                    "name": "currency",
+                    "type": "string",
+                    "size": 10,
+                    "default": "USD"
+                },
+                {
+                    "name": "items",
+                    "type": "json",
+                    "nullable": true
+                },
+                {
+                    "name": "created_at",
+                    "type": "datetime"
+                },
+                {
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "nullable": true
+                }
+            ]
+        },
+        {
+            "name": "invoices",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "primary"
+                },
+                {
+                    "name": "invoice_number",
+                    "type": "string",
+                    "size": 64,
+                    "nullable": false
+                },
+                {
+                    "name": "order_id",
+                    "type": "integer",
+                    "nullable": true
+                },
+                {
+                    "name": "status",
+                    "type": "enum",
+                    "values": [
+                        "draft",
+                        "sent",
+                        "paid",
+                        "cancelled"
+                    ],
+                    "default": "draft"
+                },
+                {
+                    "name": "total",
+                    "type": "decimal",
+                    "precision": 10,
+                    "scale": 2,
+                    "default": 0
+                },
+                {
+                    "name": "created_at",
+                    "type": "datetime"
+                },
+                {
+                    "name": "paid_at",
+                    "type": "datetime",
+                    "nullable": true
+                }
+            ]
+        }
+    ]
+}

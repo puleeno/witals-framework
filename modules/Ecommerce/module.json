@@ -1,0 +1,12 @@
+{
+    "name": "ecommerce",
+    "version": "1.0.0",
+    "description": "Base Ecommerce Tables and Schema",
+    "priority": 10,
+    "enabled": true,
+    "autoload": {
+        "psr-4": {
+            "Modules\\Ecommerce\\": "src/"
+        }
+    }
+}

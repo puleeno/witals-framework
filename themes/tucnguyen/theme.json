@@ -1,0 +1,9 @@
+{
+    "name": "tucnguyen",
+    "title": "Tucnguyen Native Theme",
+    "description": "Default native theme for PrestoWorld",
+    "version": "1.0.0",
+    "author": "PrestoWorld",
+    "engine": "prestoworld",
+    "type": "native"
+}
