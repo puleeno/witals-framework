@@ -175,6 +175,16 @@ class Request
         return $this->cookies[$key] ?? $default;
     }
 
+    public function files(): array
+    {
+        return $this->files;
+    }
+
+    public function file(string $key): mixed
+    {
+        return $this->files[$key] ?? null;
+    }
+
     public function body(): ?string
     {
         return $this->body;
