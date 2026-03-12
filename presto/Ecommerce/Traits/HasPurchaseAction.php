@@ -17,12 +17,12 @@ trait HasPurchaseAction
         $item = $this->resolveItem($id);
         
         if (!$item) {
-            return $this->json(['success' => false, 'message' => 'Item not found'], 404);
+            return Response::json(['success' => false, 'message' => 'Item not found'], 404);
         }
 
         // Logic to add to cart or process direct buy
         // For now, return success
-        return $this->json([
+        return Response::json([
             'success' => true,
             'message' => 'Added to checkout',
             'data' => [
