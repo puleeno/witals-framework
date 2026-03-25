@@ -150,6 +150,14 @@ class ViewManager implements FactoryContract
     }
 
     /**
+     * Add a location to the front of the array of view locations.
+     */
+    public function prependLocation(string $location): void
+    {
+        array_unshift($this->paths, $location);
+    }
+
+    /**
      * Add a new namespace to the loader.
      */
     public function addNamespace(string $namespace, string|array $hints): void
@@ -164,6 +172,24 @@ class ViewManager implements FactoryContract
     {
         $this->engines[$extension] = $engine;
         $this->extensions[$extension] = $extension;
+    }
+
+    /**
+     * Get a registered view engine.
+     */
+    public function getEngine(string $extension): ?Engine
+    {
+        return $this->engines[$extension] ?? null;
+    }
+
+    /**
+     * Get all registered engines.
+     * 
+     * @return array<string, Engine>
+     */
+    public function getEngines(): array
+    {
+        return $this->engines;
     }
 
     /**

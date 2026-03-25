@@ -336,12 +336,14 @@
                     </svg>
                     Return Home
                 </a>
-                <a href="javascript:location.reload()" class="btn btn-outline">
-                    <svg style="margin-right: 8px" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    Try Again
-                </a>
+                <?php if ($debug): ?>
+                    <button id="copy-btn" class="btn btn-outline" style="border-color: #fb7185; color: #fb7185;">
+                        <svg style="margin-right: 8px" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1m-7-14l4 4m0 0l4-4m-4 4V1"></path>
+                        </svg>
+                        Copy Error
+                    </button>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -349,5 +351,35 @@
             Powered by <strong>Witals Framework</strong>
         </div>
     </div>
+
+    <div id="toast" style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: #10b981; color: white; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; font-size: 0.9rem; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); z-index: 9999; box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.4);">
+        Error copied to clipboard!
+    </div>
+
+    <script>
+        document.getElementById('copy-btn')?.addEventListener('click', function() {
+            const message = <?= json_encode($message) ?>;
+            const file = <?= json_encode($file . ':' . $line) ?>;
+            const exception = <?= json_encode($exception ?? 'Error') ?>;
+            
+            let trace = '';
+            document.querySelectorAll('.trace-item').forEach((item, i) => {
+                const line = item.querySelector('.trace-line').innerText;
+                const file = item.querySelector('.trace-file').innerText;
+                const text = item.querySelector('div:last-child').innerText.trim();
+                trace += `#${i} ${file}:${line} \n  ${text}\n`;
+            });
+
+            const fullError = `Exception: ${exception}\nMessage: ${message}\nIn: ${file}\n\nStack Trace:\n${trace}`;
+            
+            navigator.clipboard.writeText(fullError).then(() => {
+                const toast = document.getElementById('toast');
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(-50%) translateY(100px)';
+                }, 3000);
+            });
+        });
+    </script>
 </body>
 </html>
