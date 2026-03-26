@@ -53,45 +53,56 @@ class StemplerEngine implements Engine
     {
         // 1. Setup Parser with required syntaxes
         $parser = new Parser();
+        
+        // Match Dynamic ({{ }}) FIRST to ensure they are prioritized over plain HTML/text
+        $parser->addSyntax(new Lexer\Grammar\DynamicGrammar(), new Parser\Syntax\DynamicSyntax());
         $parser->addSyntax(new Lexer\Grammar\HTMLGrammar(), new Parser\Syntax\HTMLSyntax());
         $parser->addSyntax(new Lexer\Grammar\PHPGrammar(), new Parser\Syntax\PHPSyntax());
         $parser->addSyntax(new Lexer\Grammar\InlineGrammar(), new Parser\Syntax\InlineSyntax());
-        $parser->addSyntax(new Lexer\Grammar\DynamicGrammar(), new Parser\Syntax\DynamicSyntax());
 
         // 2. Setup Multi-Path Loader (Aggregate)
         $loader = new class($this->paths, $this->extensions) implements \Spiral\Stempler\Loader\LoaderInterface {
             public function __construct(private array $paths, private array $extensions) {}
             
             public function has(string $name): bool {
-                // If absolute path passed (fallback logic)
-                if (file_exists($name)) return true;
+                // Normalize: forward slashes and dots both become DIRECTORY_SEPARATOR
+                // But only replace dots with sep if name has no slash (dot-notation vs path)
+                $normalized = str_contains($name, '/') 
+                    ? str_replace('/', DIRECTORY_SEPARATOR, $name)
+                    : str_replace('.', DIRECTORY_SEPARATOR, $name);
+
+                if (file_exists($normalized)) return true;
                 
                 foreach ($this->paths as $path) {
                     foreach ($this->extensions as $ext) {
-                        if (file_exists($path . DIRECTORY_SEPARATOR . $name . $ext)) return true;
+                        $file = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $normalized . '.' . ltrim($ext, '.');
+                        if (file_exists($file)) return true;
                     }
                 }
                 return false;
             }
 
             public function load(string $name): \Spiral\Stempler\Loader\Source {
-                 // Try relative first
-                 foreach ($this->paths as $path) {
+                $normalized = str_contains($name, '/')
+                    ? str_replace('/', DIRECTORY_SEPARATOR, $name)
+                    : str_replace('.', DIRECTORY_SEPARATOR, $name);
+
+                foreach ($this->paths as $path) {
                     foreach ($this->extensions as $ext) {
-                        $file = $path . DIRECTORY_SEPARATOR . $name . $ext;
+                        $file = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $normalized . '.' . ltrim($ext, '.');
                         if (file_exists($file)) {
                             return new \Spiral\Stempler\Loader\Source(file_get_contents($file), $file);
                         }
                     }
                 }
 
-                // Fallback: If name looks absolute and exist, use it
-                if (file_exists($name)) {
-                    return new \Spiral\Stempler\Loader\Source(file_get_contents($name), $name);
+                if (file_exists($normalized)) {
+                    return new \Spiral\Stempler\Loader\Source(file_get_contents($normalized), $normalized);
                 }
 
                 $pathsList = implode('; ', $this->paths);
-                throw new \Spiral\Stempler\Exception\LoaderException("Unable to load template \"{$name}\" in any search path. Search paths: [{$pathsList}] with extensions: [" . implode(',', $this->extensions) . "]");
+                error_log("Stempler LOAD FAILED for '{$name}' (normalized='{$normalized}'). Paths: [{$pathsList}]");
+                throw new \Spiral\Stempler\Exception\LoaderException("Unable to load template \"{$name}\" in any search path.");
             }
         };
 
@@ -103,11 +114,18 @@ class StemplerEngine implements Engine
             new \Spiral\Stempler\Directive\ConditionalDirective(),
             new \Spiral\Stempler\Directive\PHPDirective(),
             new \Spiral\Stempler\Directive\JsonDirective(),
-            new class extends \Spiral\Stempler\Directive\AbstractDirective {
-                public function renderInclude(\Spiral\Stempler\Node\Dynamic\Directive $directive): string {
-                    $view = $directive->values[0];
-                    $data = $directive->values[1] ?? '[]';
-                    return sprintf('<?php echo \Witals\Framework\Application::getInstance()->make(\Witals\Framework\Contracts\View\Factory::class)->make(%s, array_merge(get_defined_vars(), %s))->render(); ?>', $view, $data);
+            new class implements \Spiral\Stempler\Directive\DirectiveRendererInterface {
+                public function hasDirective(string $name): bool {
+                    return $name === 'include';
+                }
+
+                public function render(\Spiral\Stempler\Node\Dynamic\Directive $directive): ?string {
+                    if ($directive->name === 'include') {
+                        $view = $directive->values[0];
+                        $data = $directive->values[1] ?? '[]';
+                        return sprintf('<?php echo \Witals\Framework\Application::getInstance()->make(\Witals\Framework\Contracts\View\Factory::class)->make(%s, array_merge(get_defined_vars(), %s))->render(); ?>', $view, $data);
+                    }
+                    return null;
                 }
             }
         ];
@@ -164,25 +182,31 @@ class StemplerEngine implements Engine
 
     protected function compile(string $path, string $compiledPath): void
     {
-        $path = realpath($path) ?: $path;
-        $name = $path;
+        $realpath = realpath($path) ?: $path;
+        $name = $realpath;
 
-        foreach ($this->paths as $baseDir) {
-            if (str_starts_with($path, $baseDir)) {
-                $name = trim(substr($path, strlen($baseDir)), DIRECTORY_SEPARATOR);
+        $dirs = $this->paths;
+        usort($dirs, fn($a, $b) => strlen($b) <=> strlen($a));
+
+        foreach ($dirs as $baseDir) {
+            $baseDir = realpath($baseDir) ?: $baseDir;
+            if (str_starts_with($realpath, $baseDir)) {
+                $name = trim(substr($realpath, strlen($baseDir)), DIRECTORY_SEPARATOR);
                 break;
             }
         }
         
-        // Strip extensions
-        foreach ($this->extensions as $ext) {
+        $exts = $this->extensions;
+        usort($exts, fn($a, $b) => strlen($b) <=> strlen($a));
+        foreach ($exts as $ext) {
+            $ext = '.' . ltrim($ext, '.');
             if (str_ends_with($name, $ext)) {
                 $name = substr($name, 0, -strlen($ext));
                 break;
             }
         }
         
-        $result = $this->builder->compile($name);
+        $result = $this->builder->compile(str_replace(DIRECTORY_SEPARATOR, '/', $name));
         
         if (!is_dir(dirname($compiledPath))) {
             mkdir(dirname($compiledPath), 0777, true);

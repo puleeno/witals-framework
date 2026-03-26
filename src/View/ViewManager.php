@@ -202,6 +202,7 @@ class ViewManager implements FactoryContract
 
         foreach ($extensions as $extension) {
             if (str_ends_with($path, '.' . $extension)) {
+                error_log("View: Choosing engine [$extension] for path [$path]");
                 return $this->engines[$extension];
             }
         }
