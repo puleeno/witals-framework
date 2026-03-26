@@ -234,3 +234,23 @@ if (!function_exists('is_authenticated')) {
         return auth_user() !== null;
     }
 }
+
+if (!function_exists('view')) {
+    /**
+     * Render a view template.
+     */
+    function view(string $view, array $data = []): string
+    {
+        return app(\Witals\Framework\Contracts\View\Factory::class)->make($view, $data)->render();
+    }
+}
+
+if (!function_exists('redirect')) {
+    /**
+     * Create a redirect response.
+     */
+    function redirect(string $url, int $status = 302): \Witals\Framework\Http\Response
+    {
+        return \Witals\Framework\Http\Response::redirect($url, $status);
+    }
+}
