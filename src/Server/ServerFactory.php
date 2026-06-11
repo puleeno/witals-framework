@@ -22,6 +22,7 @@ class ServerFactory
     ): Server {
         return match ($runtime) {
             RuntimeType::ROADRUNNER => new RoadRunnerServer($app),
+            RuntimeType::FRANKENPHP => new FrankenPhpServer($app),
             RuntimeType::REACTPHP => new ReactPhpServer($app, $host, $port),
             RuntimeType::SWOOLE => new SwooleServer($app, $host, $port, $options),
             RuntimeType::OPENSWOOLE => new OpenSwooleServer($app, $host, $port, $options),

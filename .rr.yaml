@@ -1,0 +1,14 @@
+version: "3"
+
+server:
+  command: "php public/index.php"
+  env:
+    - RR_MODE: true
+
+http:
+  address: 0.0.0.0:8080
+  pool:
+    num_workers: 2
+    max_jobs: 1000
+    supervisor:
+      max_worker_memory: 128

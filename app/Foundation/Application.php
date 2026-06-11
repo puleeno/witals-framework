@@ -110,10 +110,30 @@ class Application extends BaseApplication
     public function registerCoreContainerAliases(): void
     {
         parent::registerCoreContainerAliases();
-        
+
         // Initialize Module Manager
         $this->moduleManager = new ModuleManager($this);
         $this->instance(ModuleManager::class, $this->moduleManager);
+    }
+
+    public function registerConfiguredProviders(): void
+    {
+        parent::registerConfiguredProviders();
+
+        $this->singleton(
+            \Witals\Framework\Contracts\Http\Kernel::class,
+            \App\Http\Kernel::class
+        );
+
+        $this->registerProviders([
+            \App\Providers\LogServiceProvider::class,
+            \App\Providers\DatabaseServiceProvider::class,
+            \App\Providers\ViewServiceProvider::class,
+            \App\Providers\RouteServiceProvider::class,
+            \App\Providers\HookServiceProvider::class,
+            \App\Providers\ConsoleServiceProvider::class,
+            \App\Providers\AppServiceProvider::class,
+        ]);
     }
 
     /**

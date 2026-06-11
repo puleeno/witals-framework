@@ -27,6 +27,7 @@ class Kernel implements KernelContract
     }
 
     protected array $middleware = [
+        \App\Http\Middleware\CorsMiddleware::class,
         \App\Http\Middleware\LocaleMiddleware::class,
         \Witals\Framework\Auth\Middleware\AuthMiddleware::class,
         \App\Http\Middleware\AdminAuthMiddleware::class,

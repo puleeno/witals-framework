@@ -25,7 +25,7 @@
     "require": {
         "php": "^8.1",
         "psr/log": "^3.0",
-        "paragonie/paseto": "dev-master",
+        "paragonie/paseto": "^2.0",
         "spiral/roadrunner-http": "^3.0",
         "spiral/roadrunner-worker": "^3.0",
         "nyholm/psr7": "^1.8",
@@ -33,18 +33,13 @@
         "cycle/orm": "^2.0",
         "cycle/database": "^2.0",
         "cycle/annotated": "^3.0",
-        "psr/http-server-middleware": "^1.0@dev",
-        "psr/http-server-handler": "^1.0@dev",
-        "spiral/stempler": "^3.17@dev",
-        "laravel/serializable-closure": "2.x-dev",
-        "prestoworld/wp-bridge": "dev-master",
+        "psr/http-server-middleware": "^1.0",
+        "psr/http-server-handler": "^1.0",
+        "spiral/stempler": "^3.17",
+        "laravel/serializable-closure": "2.x",
         "spiral/data-grid": "^3.0",
-        "prestoworld/wporg-marketplace": "dev-master",
-        "cakephp/chronos": "3.x-dev",
-        "league/omnipay": "^3.2@dev",
-        "omnipay/paypal": "^3.0@dev",
-        "omnipay/stripe": "^3.2@dev",
-        "symfony/http-client": "6.4.x-dev"
+        "cakephp/chronos": "3.x",
+        "symfony/http-client": "6.4.x"
     },
     "suggest": {
         "react/http": "Required for ReactPHP runtime support (^1.9)",
