@@ -11,7 +11,7 @@ class SyncQueue implements QueueInterface
 {
     protected string $connectionName;
 
-    public function push(object $job, string $queue = null): string
+    public function push(object $job, ?string $queue = null): string
     {
         $jobId = uniqid('sync_', true);
 
@@ -20,7 +20,7 @@ class SyncQueue implements QueueInterface
         return $jobId;
     }
 
-    public function pushRaw(string $payload, string $queue = null): string
+    public function pushRaw(string $payload, ?string $queue = null): string
     {
         $job = unserialize($payload);
 
@@ -31,17 +31,17 @@ class SyncQueue implements QueueInterface
         return $this->push($job, $queue);
     }
 
-    public function later(\DateTimeInterface|\DateInterval|int $delay, object $job, string $queue = null): string
+    public function later(\DateTimeInterface|\DateInterval|int $delay, object $job, ?string $queue = null): string
     {
         return $this->push($job, $queue);
     }
 
-    public function pop(string $queue = null): ?JobInterface
+    public function pop(?string $queue = null): ?JobInterface
     {
         return null;
     }
 
-    public function bulk(array $jobs, string $queue = null): array
+    public function bulk(array $jobs, ?string $queue = null): array
     {
         $ids = [];
 

@@ -87,7 +87,7 @@ class PasetoTokenStorage implements TokenStorageInterface
         }
     }
 
-    public function create(array $payload, DateTimeInterface $expiresAt = null): TokenInterface
+    public function create(array $payload, ?DateTimeInterface $expiresAt = null): TokenInterface
     {
         $builder = Builder::getLocal($this->key, new Version4());
         

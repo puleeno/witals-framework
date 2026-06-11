@@ -60,7 +60,7 @@ class DatabaseTokenStorage implements TokenStorageInterface
         };
     }
 
-    public function create(array $payload, DateTimeInterface $expiresAt = null): TokenInterface
+    public function create(array $payload, ?DateTimeInterface $expiresAt = null): TokenInterface
     {
         if (!$this->db()->hasTable($this->table)) {
             $this->createTable();

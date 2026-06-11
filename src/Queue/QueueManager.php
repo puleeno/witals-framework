@@ -101,27 +101,27 @@ class QueueManager implements QueueInterface
         return $this->worker;
     }
 
-    public function push(object $job, string $queue = null): string
+    public function push(object $job, ?string $queue = null): string
     {
         return $this->connection($job->connection ?? null)->push($job, $queue ?? $job->queue ?? null);
     }
 
-    public function pushRaw(string $payload, string $queue = null): string
+    public function pushRaw(string $payload, ?string $queue = null): string
     {
         return $this->connection()->pushRaw($payload, $queue);
     }
 
-    public function later(\DateTimeInterface|\DateInterval|int $delay, object $job, string $queue = null): string
+    public function later(\DateTimeInterface|\DateInterval|int $delay, object $job, ?string $queue = null): string
     {
         return $this->connection($job->connection ?? null)->later($delay, $job, $queue ?? $job->queue ?? null);
     }
 
-    public function pop(string $queue = null): ?\Witals\Framework\Queue\Contracts\JobInterface
+    public function pop(?string $queue = null): ?\Witals\Framework\Queue\Contracts\JobInterface
     {
         return $this->connection()->pop($queue);
     }
 
-    public function bulk(array $jobs, string $queue = null): array
+    public function bulk(array $jobs, ?string $queue = null): array
     {
         return $this->connection()->bulk($jobs, $queue);
     }

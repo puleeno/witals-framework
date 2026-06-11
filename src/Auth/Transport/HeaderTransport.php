@@ -28,7 +28,7 @@ class HeaderTransport implements HttpTransportInterface
         return is_string($token) && !empty($token) ? $token : null;
     }
 
-    public function commitToken(Request $request, Response $response, TokenInterface $token, DateTimeInterface $expiresAt = null): Response
+    public function commitToken(Request $request, Response $response, TokenInterface $token, ?DateTimeInterface $expiresAt = null): Response
     {
         // Headers are usually set on the response object
         return $response->withHeader($this->header, $token->getID());

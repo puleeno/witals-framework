@@ -18,7 +18,7 @@ interface HttpTransportInterface
     /**
      * Commit token to response (e.g. set cookie or header).
      */
-    public function commitToken(Request $request, Response $response, TokenInterface $token, DateTimeInterface $expiresAt = null): Response;
+    public function commitToken(Request $request, Response $response, TokenInterface $token, ?DateTimeInterface $expiresAt = null): Response;
 
     /**
      * Remove token from response (e.g. delete cookie).

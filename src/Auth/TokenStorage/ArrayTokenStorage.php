@@ -22,7 +22,7 @@ class ArrayTokenStorage implements TokenStorageInterface
         return $this->tokens[$id] ?? null;
     }
 
-    public function create(array $payload, DateTimeInterface $expiresAt = null): TokenInterface
+    public function create(array $payload, ?DateTimeInterface $expiresAt = null): TokenInterface
     {
         // Simple random ID
         $id = bin2hex(random_bytes(32));

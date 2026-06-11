@@ -22,12 +22,12 @@ class RedisQueue implements QueueInterface
     ) {
     }
 
-    public function push(object $job, string $queue = null): string
+    public function push(object $job, ?string $queue = null): string
     {
         return $this->pushRaw($this->createPayload($job), $queue);
     }
 
-    public function pushRaw(string $payload, string $queue = null): string
+    public function pushRaw(string $payload, ?string $queue = null): string
     {
         $queue ??= $this->queue;
 
@@ -36,7 +36,7 @@ class RedisQueue implements QueueInterface
         return uniqid('redis_', true);
     }
 
-    public function later(DateTimeInterface|DateInterval|int $delay, object $job, string $queue = null): string
+    public function later(DateTimeInterface|DateInterval|int $delay, object $job, ?string $queue = null): string
     {
         $queue ??= $this->queue;
 
@@ -48,7 +48,7 @@ class RedisQueue implements QueueInterface
         return uniqid('redis_', true);
     }
 
-    public function pop(string $queue = null): ?JobInterface
+    public function pop(?string $queue = null): ?JobInterface
     {
         $queue ??= $this->queue;
 
@@ -78,7 +78,7 @@ class RedisQueue implements QueueInterface
         );
     }
 
-    public function bulk(array $jobs, string $queue = null): array
+    public function bulk(array $jobs, ?string $queue = null): array
     {
         $queue ??= $this->queue;
         $ids = [];

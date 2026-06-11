@@ -43,12 +43,12 @@ class DatabaseQueue implements QueueInterface
         $this->afterCommit = $afterCommit;
     }
 
-    public function push(object $job, string $queue = null): string
+    public function push(object $job, ?string $queue = null): string
     {
         return $this->pushRaw($this->createPayload($job), $queue);
     }
 
-    public function pushRaw(string $payload, string $queue = null): string
+    public function pushRaw(string $payload, ?string $queue = null): string
     {
         $queue ??= $this->queue;
 
@@ -66,7 +66,7 @@ class DatabaseQueue implements QueueInterface
         return (string) $id;
     }
 
-    public function later(DateTimeInterface|DateInterval|int $delay, object $job, string $queue = null): string
+    public function later(DateTimeInterface|DateInterval|int $delay, object $job, ?string $queue = null): string
     {
         $queue ??= $this->queue;
 
@@ -86,7 +86,7 @@ class DatabaseQueue implements QueueInterface
         return (string) $id;
     }
 
-    public function pop(string $queue = null): ?JobInterface
+    public function pop(?string $queue = null): ?JobInterface
     {
         $queue ??= $this->queue;
 
@@ -106,7 +106,7 @@ class DatabaseQueue implements QueueInterface
         );
     }
 
-    public function bulk(array $jobs, string $queue = null): array
+    public function bulk(array $jobs, ?string $queue = null): array
     {
         $queue ??= $this->queue;
         $ids = [];

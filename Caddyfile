@@ -1,5 +1,8 @@
+{
+    frankenphp
+}
+
 localhost:8080 {
     root * public/
-    php_fastcgi
-    file_server
+    php_server
 }

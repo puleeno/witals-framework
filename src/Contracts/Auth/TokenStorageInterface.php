@@ -16,7 +16,7 @@ interface TokenStorageInterface
     /**
      * Create a new token with payload.
      */
-    public function create(array $payload, DateTimeInterface $expiresAt = null): TokenInterface;
+    public function create(array $payload, ?DateTimeInterface $expiresAt = null): TokenInterface;
 
     /**
      * Delete token.

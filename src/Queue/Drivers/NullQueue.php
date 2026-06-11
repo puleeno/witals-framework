@@ -11,27 +11,27 @@ class NullQueue implements QueueInterface
 {
     protected string $connectionName;
 
-    public function push(object $job, string $queue = null): string
+    public function push(object $job, ?string $queue = null): string
     {
         return uniqid('null_', true);
     }
 
-    public function pushRaw(string $payload, string $queue = null): string
+    public function pushRaw(string $payload, ?string $queue = null): string
     {
         return uniqid('null_', true);
     }
 
-    public function later(\DateTimeInterface|\DateInterval|int $delay, object $job, string $queue = null): string
+    public function later(\DateTimeInterface|\DateInterval|int $delay, object $job, ?string $queue = null): string
     {
         return uniqid('null_', true);
     }
 
-    public function pop(string $queue = null): ?JobInterface
+    public function pop(?string $queue = null): ?JobInterface
     {
         return null;
     }
 
-    public function bulk(array $jobs, string $queue = null): array
+    public function bulk(array $jobs, ?string $queue = null): array
     {
         $ids = [];
 

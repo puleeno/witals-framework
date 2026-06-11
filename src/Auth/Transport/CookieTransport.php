@@ -22,7 +22,7 @@ class CookieTransport implements HttpTransportInterface
         return $request->cookie($this->cookieName);
     }
 
-    public function commitToken(Request $request, Response $response, TokenInterface $token, DateTimeInterface $expiresAt = null): Response
+    public function commitToken(Request $request, Response $response, TokenInterface $token, ?DateTimeInterface $expiresAt = null): Response
     {
         // Simple Set-Cookie header construction
         $value = $token->getID();
