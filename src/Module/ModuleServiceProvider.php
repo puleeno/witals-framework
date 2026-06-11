@@ -33,5 +33,6 @@ class ModuleServiceProvider extends ServiceProvider
 
         $kernel->register(\Witals\Framework\Module\Console\ModuleListCommand::class);
         $kernel->register(\Witals\Framework\Module\Console\ModuleDiscoverCommand::class);
+        $kernel->register(\Witals\Framework\Module\Console\ModuleValidateCommand::class);
     }
 }

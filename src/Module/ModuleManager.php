@@ -7,7 +7,7 @@ namespace Witals\Framework\Module;
 use Witals\Framework\Application;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
-use RuntimeException;
+use Witals\Framework\Module\Contracts\ModuleInterface;
 
 class ModuleManager implements Contracts\ModuleManagerInterface
 {
@@ -54,7 +54,8 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
-            $metadata = json_decode(file_get_contents($metaFile), true);
+            $raw = file_get_contents($metaFile);
+            $metadata = json_decode($raw, true);
 
             if ($metadata === null || !isset($metadata['name'])) {
                 continue;
@@ -99,8 +100,12 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             $routePrefix = $prefix !== '' ? '/' . ltrim($prefix, '/') : '';
 
             foreach ($routes as $route) {
-                $method = strtoupper($route['method'] ?? 'GET');
-                $path = $route['path'] ?? '';
+                if (!isset($route['method'], $route['path'], $route['handler'])) {
+                    continue;
+                }
+
+                $method = strtoupper($route['method']);
+                $path = $route['path'];
 
                 $fullPath = $routePrefix . '/' . ltrim($path, '/');
                 $pattern = $this->pathToRegex($fullPath);
@@ -109,7 +114,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                     'method' => $method,
                     'pattern' => $pattern,
                     'module' => $name,
-                    'handler' => $route['handler'] ?? null,
+                    'handler' => $route['handler'],
                 ];
             }
         }
@@ -133,34 +138,6 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             if (preg_match($entry['pattern'], $path)) {
                 return $entry['module'];
             }
-        }
-
-        return null;
-    }
-
-    public function resolveModuleForRequest(Request $request): ?ModuleInterface
-    {
-        $method = $request->method();
-        $path = '/' . ltrim($request->path(), '/');
-
-        $index = $this->buildRouteIndex();
-
-        foreach ($index as $entry) {
-            if ($entry['method'] !== $method) {
-                continue;
-            }
-
-            if (!preg_match($entry['pattern'], $path, $matches)) {
-                continue;
-            }
-
-            $module = $this->load($entry['module']);
-
-            if ($module === null) {
-                continue;
-            }
-
-            return $module;
         }
 
         return null;
@@ -196,43 +173,6 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         return null;
     }
 
-    protected function executeHandler(mixed $handler, Request $request, array $params): Response
-    {
-        $result = match (true) {
-            $handler instanceof \Closure => $this->app->call($handler, array_merge(['request' => $request], $params)),
-            is_string($handler) => $this->app->call($handler, array_merge(['request' => $request], $params)),
-            is_array($handler) => $this->executeController($handler, $request, $params),
-            default => $handler,
-        };
-
-        return $this->normalizeResponse($result);
-    }
-
-    protected function executeController(array $handler, Request $request, array $params): mixed
-    {
-        [$class, $method] = $handler;
-        $instance = is_string($class) ? $this->app->make($class) : $class;
-
-        return $this->app->call([$instance, $method], array_merge(['request' => $request], $params));
-    }
-
-    protected function normalizeResponse(mixed $result): Response
-    {
-        if ($result instanceof Response) {
-            return $result;
-        }
-
-        if (is_string($result)) {
-            return Response::html($result);
-        }
-
-        if (is_array($result)) {
-            return Response::json($result);
-        }
-
-        return Response::json(['error' => 'Invalid module response'], 500);
-    }
-
     public function load(string $name): ?ModuleInterface
     {
         if (isset($this->instances[$name])) {
@@ -247,26 +187,18 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
         $instance = new Module($this->app, $meta['_path'], $meta);
 
-        $instance->register();
-
-        // Load dependencies before booting
-        $this->loadDependencies($instance);
-
-        $instance->boot();
+        try {
+            $instance->register();
+            $this->loadDependencies($instance);
+            $instance->boot();
+        } catch (\Throwable) {
+            return null;
+        }
 
         $this->instances[$name] = $instance;
         $this->loaded[$name] = true;
 
         return $instance;
-    }
-
-    protected function loadDependencies(Module $module): void
-    {
-        foreach ($module->getDependencies() as $dep) {
-            if (!isset($this->loaded[$dep])) {
-                $this->load($dep);
-            }
-        }
     }
 
     public function loadSupportModules(): void
@@ -280,13 +212,26 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
-            $type = $meta['_type'] ?? 'support';
-
-            if ($type !== 'support') {
+            if (($meta['_type'] ?? 'support') !== 'support') {
                 continue;
             }
 
             $this->load($name);
+        }
+    }
+
+    protected function loadDependencies(Module $module): void
+    {
+        foreach ($module->getDependencies() as $dep) {
+            if (isset($this->loaded[$dep])) {
+                continue;
+            }
+
+            if (!isset($this->metadataMap[$dep])) {
+                continue;
+            }
+
+            $this->load($dep);
         }
     }
 
