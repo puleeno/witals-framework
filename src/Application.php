@@ -450,6 +450,7 @@ class Application extends Container
         $this->register(\Witals\Framework\Console\ConsoleServiceProvider::class);
         $this->register(\Witals\Framework\Queue\QueueServiceProvider::class);
         $this->register(\Witals\Framework\Module\ModuleServiceProvider::class);
+        $this->register(\Witals\Framework\Events\EventServiceProvider::class);
     }
 
     /**

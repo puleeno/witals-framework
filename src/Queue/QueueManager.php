@@ -12,6 +12,7 @@ use Witals\Framework\Queue\Drivers\RedisQueue;
 use Witals\Framework\Queue\Drivers\SyncQueue;
 use Witals\Framework\Queue\Drivers\NullQueue;
 use Psr\Log\LoggerInterface;
+use Witals\Framework\Queue\Contracts\FailedJobProviderInterface;
 
 class QueueManager implements QueueInterface
 {
@@ -25,6 +26,8 @@ class QueueManager implements QueueInterface
 
     protected ?QueueWorkerInterface $worker = null;
 
+    protected ?FailedJobProviderInterface $failedJobProvider = null;
+
     public function __construct(array $config = [])
     {
         $this->config = $config;
@@ -34,6 +37,30 @@ class QueueManager implements QueueInterface
     public function setLogger(?LoggerInterface $logger): void
     {
         $this->logger = $logger;
+    }
+
+    public function setFailedJobProvider(?FailedJobProviderInterface $provider): void
+    {
+        $this->failedJobProvider = $provider;
+    }
+
+    public function getFailedJobProvider(): ?FailedJobProviderInterface
+    {
+        return $this->failedJobProvider;
+    }
+
+    public function logFailedJob(string $connection, string $queue, object $job, \Throwable $e): void
+    {
+        if ($this->failedJobProvider === null) {
+            return;
+        }
+
+        $payload = serialize([
+            'displayName' => method_exists($job, 'displayName') ? $job->displayName() : get_class($job),
+            'job' => serialize($job),
+        ]);
+
+        $this->failedJobProvider->log($connection, $queue, $payload, $e);
     }
 
     public function connection(?string $name = null): QueueInterface

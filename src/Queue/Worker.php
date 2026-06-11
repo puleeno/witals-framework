@@ -87,6 +87,7 @@ class Worker implements QueueWorkerInterface
 
             if ($maxTries > 0 && $attempts >= $maxTries) {
                 $job->failed($e);
+                $this->manager->logFailedJob($connection, $job->queue() ?? 'default', $job, $e);
                 $job->delete();
                 $this->logError("Job deleted after max tries: {$job->displayName()} [{$job->jobId()}]");
             } else {

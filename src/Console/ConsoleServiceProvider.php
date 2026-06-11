@@ -12,12 +12,13 @@ class ConsoleServiceProvider extends ServiceProvider
     {
         $this->app->singleton(Kernel::class, function ($app) {
             $kernel = new Kernel($app);
-            
-            // Register default commands
+
             $kernel->register(ServeCommand::class);
             $kernel->register(SchemaSyncCommand::class);
             $kernel->register(DbSeedCommand::class);
-            
+            $kernel->register(ConfigCacheCommand::class);
+            $kernel->register(ConfigClearCommand::class);
+
             return $kernel;
         });
     }

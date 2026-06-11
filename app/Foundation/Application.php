@@ -258,6 +258,11 @@ class Application extends BaseApplication
             $this->configRepository = new ConfigRepository(
                 $this->resolveConfigPath('config')
             );
+
+            $cachePath = $this->basePath('bootstrap/cache/config.php');
+            if (file_exists($cachePath)) {
+                $this->configRepository->setCachePath($cachePath);
+            }
         }
     }
 

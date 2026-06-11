@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Witals\Framework\Queue;
 
+use Witals\Framework\Queue\Contracts\FailedJobProviderInterface;
+use Witals\Framework\Queue\FailedJob\DatabaseFailedJobProvider;
 use Witals\Framework\Support\ServiceProvider;
 
 class QueueServiceProvider extends ServiceProvider
@@ -20,6 +22,8 @@ class QueueServiceProvider extends ServiceProvider
                 $manager->setLogger($app->make(\Psr\Log\LoggerInterface::class));
             }
 
+            $manager->setFailedJobProvider($this->resolveFailedJobProvider($queueConfig));
+
             return $manager;
         });
 
@@ -31,6 +35,27 @@ class QueueServiceProvider extends ServiceProvider
         $kernel = $this->app->make(\Witals\Framework\Console\Kernel::class);
 
         $kernel->register(\Witals\Framework\Queue\Console\QueueWorkCommand::class);
+        $kernel->register(\Witals\Framework\Queue\Console\QueueFailedCommand::class);
+        $kernel->register(\Witals\Framework\Queue\Console\QueueRetryCommand::class);
+        $kernel->register(\Witals\Framework\Queue\Console\QueueFlushCommand::class);
+        $kernel->register(\Witals\Framework\Queue\Console\QueueForgetCommand::class);
+    }
+
+    protected function resolveFailedJobProvider(array $config): ?FailedJobProviderInterface
+    {
+        $driver = $config['failed'] ?? null;
+
+        if ($driver === null) {
+            return null;
+        }
+
+        return match ($driver['driver'] ?? 'database') {
+            'database' => new DatabaseFailedJobProvider(
+                connection: $driver['connection'] ?? 'default',
+                table: $driver['table'] ?? 'failed_jobs',
+            ),
+            default => null,
+        };
     }
 
     protected function getDefaultConfig(): array
@@ -52,6 +77,11 @@ class QueueServiceProvider extends ServiceProvider
                     'retry_after' => 90,
                     'block_for' => 5,
                 ],
+            ],
+            'failed' => [
+                'driver' => 'database',
+                'connection' => 'default',
+                'table' => 'failed_jobs',
             ],
         ];
     }
