@@ -23,6 +23,7 @@ class LifecycleFactory
 
         return match ($runtime) {
             RuntimeType::ROADRUNNER => $app->make(RoadRunnerLifecycle::class),
+            RuntimeType::FRANKENPHP => $app->make(FrankenPhpLifecycle::class),
             RuntimeType::REACTPHP => $app->make(ReactPhpLifecycle::class),
             RuntimeType::SWOOLE => $app->make(SwooleLifecycle::class),
             RuntimeType::OPENSWOOLE => $app->make(OpenSwooleLifecycle::class),
@@ -37,6 +38,7 @@ class LifecycleFactory
     {
         return match ($runtime) {
             RuntimeType::ROADRUNNER => new RoadRunnerLifecycle(),
+            RuntimeType::FRANKENPHP => new FrankenPhpLifecycle(),
             RuntimeType::REACTPHP => new ReactPhpLifecycle(),
             RuntimeType::SWOOLE => new SwooleLifecycle(),
             RuntimeType::OPENSWOOLE => new OpenSwooleLifecycle(),

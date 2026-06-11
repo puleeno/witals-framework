@@ -367,6 +367,14 @@ class Application extends Container
     }
 
     /**
+     * Check if running on FrankenPHP
+     */
+    public function isFrankenPHP(): bool
+    {
+        return $this->runtime === RuntimeType::FRANKENPHP;
+    }
+
+    /**
      * Check if running in traditional mode
      */
     public function isTraditional(): bool
@@ -440,6 +448,8 @@ class Application extends Container
     {
         // Core providers
         $this->register(\Witals\Framework\Console\ConsoleServiceProvider::class);
+        $this->register(\Witals\Framework\Queue\QueueServiceProvider::class);
+        $this->register(\Witals\Framework\Module\ModuleServiceProvider::class);
     }
 
     /**
@@ -466,7 +476,19 @@ class Application extends Container
         // 3. Trigger beforeRequest callbacks
         $this->callBeforeRequestCallbacks($request);
 
-        // 4. Create the RequestHandler (which manages init, execute, respond, shutdown)
+        // 4. Try module dispatch first (route modules)
+        if ($this->has(\Witals\Framework\Module\ModuleManager::class)) {
+            $moduleResponse = $this->make(\Witals\Framework\Module\ModuleManager::class)->dispatch($request);
+
+            if ($moduleResponse !== null) {
+                return $this->runScope(
+                    [Request::class => $request],
+                    fn () => $moduleResponse
+                );
+            }
+        }
+
+        // 5. Fallback to regular HTTP Kernel
         $handler = new \Witals\Framework\Http\RequestHandler(
             $this,
             $this->make(\Witals\Framework\Contracts\Http\Kernel::class)

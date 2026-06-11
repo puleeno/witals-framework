@@ -1,0 +1,34 @@
+{
+    "name": "sample",
+    "version": "1.0.0",
+    "description": "Example route module — handles /api/sample/* endpoints",
+    "type": "route",
+    "priority": 50,
+    "enabled": true,
+    "route_prefix": "/api/sample",
+    "routes": [
+        {
+            "method": "GET",
+            "path": "/hello",
+            "handler": ["Modules\\Sample\\Controllers\\SampleController", "hello"]
+        },
+        {
+            "method": "GET",
+            "path": "/hello/{name}",
+            "handler": ["Modules\\Sample\\Controllers\\SampleController", "greet"]
+        }
+    ],
+    "provides": [
+        "sample.greeting"
+    ],
+    "depends": [],
+    "consumes": [],
+    "providers": [
+        "Modules\\Sample\\Providers\\SampleServiceProvider"
+    ],
+    "autoload": {
+        "psr-4": {
+            "Modules\\Sample\\": "src/"
+        }
+    }
+}

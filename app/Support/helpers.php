@@ -245,6 +245,32 @@ if (!function_exists('view')) {
     }
 }
 
+if (!function_exists('dispatch')) {
+    /**
+     * Dispatch a job to the queue.
+     */
+    function dispatch(object $job): ?string
+    {
+        /** @var \Witals\Framework\Queue\QueueManager $queue */
+        $queue = app(\Witals\Framework\Queue\QueueManager::class);
+
+        return $queue->push($job);
+    }
+}
+
+if (!function_exists('dispatch_later')) {
+    /**
+     * Dispatch a job to the queue after a delay.
+     */
+    function dispatch_later(\DateTimeInterface|\DateInterval|int $delay, object $job): ?string
+    {
+        /** @var \Witals\Framework\Queue\QueueManager $queue */
+        $queue = app(\Witals\Framework\Queue\QueueManager::class);
+
+        return $queue->later($delay, $job);
+    }
+}
+
 if (!function_exists('redirect')) {
     /**
      * Create a redirect response.

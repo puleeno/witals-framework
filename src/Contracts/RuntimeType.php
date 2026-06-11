@@ -12,6 +12,7 @@ enum RuntimeType: string
 {
     case TRADITIONAL = 'traditional';
     case ROADRUNNER = 'roadrunner';
+    case FRANKENPHP = 'frankenphp';
     case REACTPHP = 'reactphp';
     case SWOOLE = 'swoole';
     case OPENSWOOLE = 'openswoole';
@@ -23,7 +24,7 @@ enum RuntimeType: string
     {
         return match ($this) {
             self::TRADITIONAL => false,
-            self::ROADRUNNER, self::REACTPHP, self::SWOOLE, self::OPENSWOOLE => true,
+            self::ROADRUNNER, self::FRANKENPHP, self::REACTPHP, self::SWOOLE, self::OPENSWOOLE => true,
         };
     }
 
@@ -33,7 +34,7 @@ enum RuntimeType: string
     public function isAsync(): bool
     {
         return match ($this) {
-            self::TRADITIONAL, self::ROADRUNNER => false,
+            self::TRADITIONAL, self::ROADRUNNER, self::FRANKENPHP => false,
             self::REACTPHP, self::SWOOLE, self::OPENSWOOLE => true,
         };
     }
@@ -43,7 +44,12 @@ enum RuntimeType: string
      */
     public static function detect(): self
     {
-        // Check for RoadRunner (Prioritized)
+        // Check for FrankenPHP (Worker mode — shares process across requests)
+        if (isset($_SERVER['FRANKENPHP_WORKER']) || getenv('FRANKENPHP_WORKER')) {
+            return self::FRANKENPHP;
+        }
+
+        // Check for RoadRunner
         if (isset($_SERVER['RR_MODE']) || getenv('RR_MODE')) {
             return self::ROADRUNNER;
         }
