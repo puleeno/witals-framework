@@ -31,18 +31,15 @@ class Worker implements QueueWorkerInterface
     public function daemon(string $connection, string $queue, array $options = []): void
     {
         $sleep = $options['sleep'] ?? 3;
-        $maxTries = $options['max_tries'] ?? 0;
-        $maxExceptions = $options['max_exceptions'] ?? 0;
-        $backoff = $options['backoff'] ?? 0;
-        $timeout = $options['timeout'] ?? 60;
         $memory = $options['memory'] ?? 128;
-        $rest = $options['rest'] ?? 0;
+        
+        $queues = array_map('trim', explode(',', $queue));
 
         $this->memoryLimit = $memory;
 
         while (!$this->shouldQuit) {
             try {
-                $job = $this->manager->connection($connection)->pop($queue);
+                $job = $this->getNextJob($connection, $queues);
 
                 if ($job !== null) {
                     $this->runJob($job, $connection, $options);
@@ -63,6 +60,19 @@ class Worker implements QueueWorkerInterface
                 $this->stop();
             }
         }
+    }
+
+    protected function getNextJob(string $connection, array $queues): ?JobInterface
+    {
+        foreach ($queues as $queue) {
+            $job = $this->manager->connection($connection)->pop($queue);
+
+            if ($job !== null) {
+                return $job;
+            }
+        }
+
+        return null;
     }
 
     public function runJob(JobInterface $job, string $connection, array $options = []): void
