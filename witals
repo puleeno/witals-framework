@@ -1,0 +1,49 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Witals Framework - CLI Tool
+ *
+ * Usage: php witals <command> [options]
+ */
+
+use App\Foundation\Application;
+use Witals\Framework\Console\Kernel;
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+// ──────────────────────────────────────────────
+// 1. Bootstrap application
+// ──────────────────────────────────────────────
+$app = new Application(__DIR__);
+
+try {
+    $app->boot();
+} catch (Throwable $e) {
+    fwrite(STDERR, sprintf(
+        "\033[31mError booting application: %s\033[0m\n%s\n",
+        $e->getMessage(),
+        $e->getFile() . ':' . $e->getLine()
+    ));
+    exit(1);
+}
+
+// ──────────────────────────────────────────────
+// 2. Dispatch CLI command
+// ──────────────────────────────────────────────
+$kernel = $app->make(Kernel::class);
+
+try {
+    $exitCode = $kernel->handle($argv);
+} catch (Throwable $e) {
+    fwrite(STDERR, sprintf(
+        "\033[31mError: %s\033[0m\n%s\n",
+        $e->getMessage(),
+        $e->getFile() . ':' . $e->getLine()
+    ));
+    $exitCode = 1;
+}
+
+exit($exitCode);

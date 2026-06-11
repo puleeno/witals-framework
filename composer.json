@@ -4,6 +4,7 @@
     "license": "MIT",
     "minimum-stability": "dev",
     "prefer-stable": true,
+    "bin": ["witals"],
     "autoload": {
         "psr-4": {
             "Witals\\Framework\\": "src/",

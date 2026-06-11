@@ -32,8 +32,11 @@ class Kernel
         }
 
         foreach ($this->commands as $commandClass) {
-            /** @var Command $command */
-            $command = new $commandClass($this->app);
+            $command = $this->resolveCommand($commandClass);
+            if ($command === null) {
+                continue;
+            }
+
             if ($command->getName() === $commandName) {
                 // Check for help flag
                 if (in_array('-h', $args) || in_array('--help', $args)) {
@@ -55,6 +58,18 @@ class Kernel
         return $this->displayHelp();
     }
 
+    protected function resolveCommand(string $commandClass): ?Command
+    {
+        try {
+            if (!class_exists($commandClass)) {
+                return null;
+            }
+            return new $commandClass($this->app);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     protected function displayHelp(): int
     {
         echo "Witals Framework CLI" . PHP_EOL . PHP_EOL;
@@ -63,8 +78,10 @@ class Kernel
         echo "Available commands:" . PHP_EOL;
 
         foreach ($this->commands as $commandClass) {
-            /** @var Command $command */
-            $command = new $commandClass($this->app);
+            $command = $this->resolveCommand($commandClass);
+            if ($command === null) {
+                continue;
+            }
             printf("  %-20s %s\n", $command->getName(), $command->getDescription());
         }
 

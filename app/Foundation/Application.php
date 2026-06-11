@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Foundation;
 
 use Witals\Framework\Application as BaseApplication;
+use App\Foundation\Config\ConfigRepository;
 use App\Foundation\Module\ModuleManager;
 
 /**
@@ -34,6 +35,8 @@ class Application extends BaseApplication
      */
     protected array $bootedProviders = [];
     protected array $config = [];
+
+    protected ?ConfigRepository $configRepository = null;
 
     /**
      * Register a service provider
@@ -76,7 +79,7 @@ class Application extends BaseApplication
         }
         
         $this->serviceProviders[$providerClass] = $provider;
-        $this->loadedProviders[$providerClass] = true;
+        $this->loadedProviders[$providerClass] = $provider;
 
         if ($this->booted && method_exists($provider, 'boot')) {
             try {
@@ -182,34 +185,87 @@ class Application extends BaseApplication
     }
 
     /**
-     * Get config value with dot notation
+     * Set config path(s) for the application.
+     *
+     * Each path can be absolute or relative to basePath.
+     * Supports PHP and JSON config files.
+     */
+    public function setConfigPaths(string|array $paths): void
+    {
+        $paths = is_array($paths) ? $paths : [$paths];
+        $this->resolveConfigRepository();
+        $this->configRepository->setPaths(
+            array_map(fn (string $p) => $this->resolveConfigPath($p), $paths)
+        );
+        $this->config = [];
+    }
+
+    /**
+     * Add an additional config path.
+     */
+    public function addConfigPath(string $path): void
+    {
+        $this->resolveConfigRepository();
+        $this->configRepository->addPath($this->resolveConfigPath($path));
+        $this->config = [];
+    }
+
+    /**
+     * Get the ConfigRepository instance.
+     */
+    public function getConfigRepository(): ConfigRepository
+    {
+        $this->resolveConfigRepository();
+        return $this->configRepository;
+    }
+
+    /**
+     * Get config value with dot notation.
+     *
+     * Looks up config files in registered paths (default: config/).
+     * Supports PHP files returning arrays and JSON files.
      */
     public function config(string $key, $default = null)
     {
+        $this->resolveConfigRepository();
+
         $keys = explode('.', $key);
         $file = array_shift($keys);
-        
-        $configPath = $this->basePath("config/{$file}.php");
-        
-        if (!file_exists($configPath)) {
-            return $default;
-        }
 
         if (isset($this->config[$file])) {
             $config = $this->config[$file];
         } else {
-            $config = require $configPath;
+            $config = $this->configRepository->load($file);
+            if ($config === null) {
+                return $default;
+            }
             $this->config[$file] = $config;
         }
-        
+
         foreach ($keys as $segment) {
             if (!is_array($config) || !array_key_exists($segment, $config)) {
                 return $default;
             }
             $config = $config[$segment];
         }
-        
+
         return $config;
+    }
+
+    private function resolveConfigRepository(): void
+    {
+        if ($this->configRepository === null) {
+            $this->configRepository = new ConfigRepository(
+                $this->resolveConfigPath('config')
+            );
+        }
+    }
+
+    private function resolveConfigPath(string $path): string
+    {
+        return str_starts_with($path, '/') || str_starts_with($path, '.')
+            ? $path
+            : $this->basePath($path);
     }
 
     /**

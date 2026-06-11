@@ -11,7 +11,7 @@ class ModuleDiscoverCommand extends Command
     protected string $name = 'module:discover';
     protected string $description = 'Discover and cache module routes for performance';
 
-    public function handle(array $args): void
+    public function handle(array $args): int
     {
         $manager = $this->app->make(\Witals\Framework\Module\ModuleManager::class);
 
@@ -30,5 +30,7 @@ class ModuleDiscoverCommand extends Command
             $method = str_pad($entry['method'], 6);
             $this->line("  {$method} [{$entry['module']}]");
         }
+
+        return 0;
     }
 }
