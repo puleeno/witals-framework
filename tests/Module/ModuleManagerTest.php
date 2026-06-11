@@ -213,6 +213,11 @@ class ModuleManagerTest extends TestCase
         $result = $manager->matchRoute('GET', '/api/hello');
         $this->assertSame('api', $result);
 
+
+
+        $result = $manager->matchRoute('GET', '/api/hello');
+        $this->assertSame('api', $result);
+
         $result = $manager->matchRoute('POST', '/api/hello');
         $this->assertNull($result);
 
@@ -248,12 +253,9 @@ class ModuleManagerTest extends TestCase
 
     public function test_load_returns_null_for_broken_module(): void
     {
-        $this->createModule('broken', [
-            'type' => 'route',
-            'version' => '1.0.0',
-            'description' => 'broken',
-            'enabled' => true,
-        ]);
+        $moduleDir = $this->modulesDir . '/broken';
+        mkdir($moduleDir, 0777, true);
+        file_put_contents($moduleDir . '/module.json', '{invalid json}');
 
         $manager = $this->app->make(ModuleManager::class);
         $result = $manager->load('broken');

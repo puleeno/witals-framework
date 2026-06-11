@@ -72,6 +72,55 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             $metadata['_path'] = $modulePath;
 
             $this->metadataMap[$name] = $metadata;
+
+            $this->discoverFunctions($name, $metadata);
+        }
+    }
+
+    protected function discoverFunctions(string $moduleName, array &$metadata): void
+    {
+        $raw = $metadata['functions'] ?? [];
+
+        $this->flattenFunctions($moduleName, $raw, $moduleName, $metadata);
+    }
+
+    protected function flattenFunctions(
+        string $moduleName,
+        array $functions,
+        string $prefix,
+        array &$moduleMeta,
+        array $parentChain = [],
+    ): void {
+        foreach ($functions as $fnName => $fnCfg) {
+            $fullFnName = $prefix . '.' . $fnName;
+            $chain = array_merge($parentChain, [$fnName]);
+
+            $fnType = $fnCfg['type'] ?? 'support';
+            $fnEnabled = $fnCfg['enabled'] ?? ($moduleMeta['enabled'] ?? true);
+            $fnPriority = $fnCfg['priority'] ?? ($moduleMeta['priority'] ?? 50);
+            $fnPrefix = $fnCfg['route_prefix'] ?? '';
+
+            $children = $fnCfg['functions'] ?? [];
+            unset($fnCfg['functions']);
+
+            $entry = $fnCfg;
+            $entry['name'] = $fullFnName;
+            $entry['type'] = $fnType;
+            $entry['enabled'] = $fnEnabled;
+            $entry['priority'] = $fnPriority;
+            $entry['_function'] = true;
+            $entry['_module'] = $moduleName;
+            $entry['_chain'] = $chain;
+            $entry['_path'] = $moduleMeta['_path'];
+            $entry['_parent'] = $parentChain !== [] ? $prefix : null;
+            $entry['route_prefix'] = $fnPrefix;
+            $entry['routes'] = $fnCfg['routes'] ?? [];
+
+            $this->metadataMap[$fullFnName] = $entry;
+
+            if ($children !== []) {
+                $this->flattenFunctions($moduleName, $children, $fullFnName, $moduleMeta, $chain);
+            }
         }
     }
 
@@ -90,14 +139,29 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
-            if (($meta['_type'] ?? 'support') !== 'route') {
+            $effectiveType = $meta['_type'] ?? $meta['type'] ?? 'support';
+            if ($effectiveType !== 'route' && !($meta['_function'] ?? false)) {
                 continue;
             }
 
-            $prefix = $meta['route_prefix'] ?? '';
-            $routes = $meta['routes'] ?? [];
+            if (($meta['_function'] ?? false) && $meta['type'] !== 'route') {
+                continue;
+            }
+
+            $moduleName = $meta['_module'] ?? $name;
+            $moduleMeta = $this->metadataMap[$moduleName] ?? [];
+            $modulePrefix = $moduleMeta['route_prefix'] ?? '';
+
+            $fnPrefix = ($meta['_function'] ?? false) ? ($meta['route_prefix'] ?? '') : '';
+
+            $prefix = $modulePrefix;
+            if ($fnPrefix !== '') {
+                $prefix = $prefix !== '' ? $prefix . '/' . ltrim($fnPrefix, '/') : $fnPrefix;
+            }
 
             $routePrefix = $prefix !== '' ? '/' . ltrim($prefix, '/') : '';
+
+            $routes = $meta['routes'] ?? [];
 
             foreach ($routes as $route) {
                 if (!isset($route['method'], $route['path'], $route['handler'])) {
@@ -113,7 +177,8 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 $index[] = [
                     'method' => $method,
                     'pattern' => $pattern,
-                    'module' => $name,
+                    'module' => $moduleName,
+                    'function' => $meta['_function'] ?? false ? $name : null,
                     'handler' => $route['handler'],
                 ];
             }
@@ -165,6 +230,16 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
+            if ($entry['function'] !== null) {
+                $fn = $module->getFunction(
+                    implode('.', array_slice(explode('.', $entry['function']), 1))
+                );
+
+                if ($fn === null || !$fn->isEnabled()) {
+                    continue;
+                }
+            }
+
             $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
 
             return $this->executeHandler($entry['handler'], $request, $params);
@@ -174,6 +249,44 @@ class ModuleManager implements Contracts\ModuleManagerInterface
     }
 
     public function load(string $name): ?ModuleInterface
+    {
+        if (isset($this->instances[$name])) {
+            return $this->instances[$name];
+        }
+
+        $this->discover();
+
+        $isFunction = str_contains($name, '.');
+        $moduleName = $isFunction ? explode('.', $name)[0] : $name;
+
+        if (!isset($this->metadataMap[$moduleName])) {
+            return null;
+        }
+
+        if ($isFunction) {
+            $module = $this->loadModule($moduleName);
+
+            if ($module === null) {
+                return null;
+            }
+
+            $fn = $module->getFunction(
+                implode('.', array_slice(explode('.', $name), 1))
+            );
+
+            if ($fn === null) {
+                return null;
+            }
+
+            $this->loaded[$name] = true;
+
+            return $module;
+        }
+
+        return $this->loadModule($name);
+    }
+
+    protected function loadModule(string $name): ?Module
     {
         if (isset($this->instances[$name])) {
             return $this->instances[$name];
@@ -212,12 +325,22 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
-            if (($meta['_type'] ?? 'support') !== 'support') {
+            if (str_contains($name, '.')) {
+                continue;
+            }
+
+            $effectiveType = $meta['_type'] ?? $meta['type'] ?? 'support';
+            if ($effectiveType !== 'support') {
                 continue;
             }
 
             $this->load($name);
         }
+    }
+
+    public function loadFunction(string $fullName): ?ModuleInterface
+    {
+        return $this->load($fullName);
     }
 
     protected function loadDependencies(Module $module): void
@@ -227,7 +350,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
-            if (!isset($this->metadataMap[$dep])) {
+            if ($dep !== '' && !isset($this->metadataMap[$dep])) {
                 continue;
             }
 
@@ -254,7 +377,13 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
     protected function sortByPriority(): array
     {
-        $modules = $this->metadataMap;
+        $modules = [];
+
+        foreach ($this->metadataMap as $name => $meta) {
+            if (!str_contains($name, '.')) {
+                $modules[$name] = $meta;
+            }
+        }
 
         uasort($modules, function (array $a, array $b) {
             $pa = $a['priority'] ?? 50;
@@ -277,5 +406,28 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         $pattern = preg_replace('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', '(?P<$1>[^/]+)', $path);
 
         return '#^' . $pattern . '$#';
+    }
+
+    protected function executeHandler(array $handler, Request $request, array $params): Response
+    {
+        [$class, $method] = $handler;
+
+        $instance = $this->app->make($class);
+
+        $result = $this->app->call([$instance, $method], $params + ['request' => $request]);
+
+        if ($result instanceof Response) {
+            return $result;
+        }
+
+        if (is_string($result)) {
+            return new Response($result, 200);
+        }
+
+        if (is_array($result)) {
+            return new Response(json_encode($result), 200, ['Content-Type' => 'application/json']);
+        }
+
+        return new Response('', 204);
     }
 }

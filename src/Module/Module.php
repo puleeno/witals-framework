@@ -13,11 +13,43 @@ class Module implements ModuleInterface
 
     protected bool $registered = false;
 
+    protected array $functions = [];
+
+    protected array $flattenedFunctions = [];
+
     public function __construct(
         protected Application $app,
         protected string $path,
         protected array $metadata = [],
     ) {
+        $this->buildFunctionTree();
+    }
+
+    protected function buildFunctionTree(): void
+    {
+        $raw = $this->metadata['functions'] ?? [];
+
+        foreach ($raw as $name => $cfg) {
+            $this->functions[$name] = $this->buildFunctionNode($name, $cfg);
+        }
+
+        $this->flattenedFunctions = [];
+        foreach ($this->functions as $fn) {
+            $this->flattenedFunctions += $fn->flatten();
+        }
+    }
+
+    protected function buildFunctionNode(string $name, array $cfg, ?ModuleFunction $parent = null): ModuleFunction
+    {
+        $node = new ModuleFunction($this->getName(), $name, $cfg, $parent);
+
+        $children = $cfg['functions'] ?? [];
+
+        foreach ($children as $cName => $cCfg) {
+            $node->addChild($this->buildFunctionNode($cName, $cCfg, $node));
+        }
+
+        return $node;
     }
 
     public function getName(): string
@@ -85,6 +117,26 @@ class Module implements ModuleInterface
         return $this->metadata;
     }
 
+    public function getFunctions(): array
+    {
+        return $this->functions;
+    }
+
+    public function hasFunction(string $name): bool
+    {
+        return isset($this->flattenedFunctions[$this->getName() . '.' . $name]);
+    }
+
+    public function getFunction(string $name): ?ModuleFunction
+    {
+        return $this->flattenedFunctions[$this->getName() . '.' . $name] ?? null;
+    }
+
+    public function getAllFunctionMetadata(): array
+    {
+        return $this->flattenedFunctions;
+    }
+
     public function register(): void
     {
         if ($this->registered) {
@@ -96,6 +148,18 @@ class Module implements ModuleInterface
         foreach ($this->getProviders() as $provider) {
             if (is_string($provider)) {
                 $this->app->register($provider);
+            }
+        }
+
+        foreach ($this->flattenedFunctions as $fnMeta) {
+            if (!($fnMeta['enabled'] ?? true)) {
+                continue;
+            }
+
+            foreach ($fnMeta['providers'] ?? [] as $provider) {
+                if (is_string($provider)) {
+                    $this->app->register($provider);
+                }
             }
         }
     }
@@ -116,6 +180,21 @@ class Module implements ModuleInterface
             $instance = $this->app->make($bootstrap);
             if (method_exists($instance, 'boot')) {
                 $instance->boot();
+            }
+        }
+
+        foreach ($this->flattenedFunctions as $fnMeta) {
+            if (!($fnMeta['enabled'] ?? true)) {
+                continue;
+            }
+
+            $bs = $fnMeta['bootstrap'] ?? null;
+
+            if ($bs !== null && is_string($bs) && class_exists($bs)) {
+                $instance = $this->app->make($bs);
+                if (method_exists($instance, 'boot')) {
+                    $instance->boot();
+                }
             }
         }
     }

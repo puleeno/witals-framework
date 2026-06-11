@@ -25,14 +25,15 @@ class ModuleValidator
             $this->validateRequiredFields($name, $metadata);
             $this->validateType($name, $metadata);
             $this->validateVersion($name, $metadata);
-            $this->validateRouteConfiguration($name, $metadata);
-            $this->validateRoutes($name, $metadata);
-
-            if (!isset($metadata['autoload']['psr-4'])) {
-                $warnings[] = "[Module] \"{$name}\": no PSR-4 autoload declared — classes may not be found.";
-            }
+            $this->validateRouteConfiguration($name, $metadata, $metadata['route_prefix'] ?? '');
+            $this->validateRoutes($name, $metadata, '');
+            $this->validateFunctions($name, $metadata, $metadata['route_prefix'] ?? '');
         } catch (ModuleException $e) {
             $errors[] = $e->getMessage();
+        }
+
+        if (!isset($metadata['autoload']['psr-4'])) {
+            $warnings[] = "[Module] \"{$name}\": no PSR-4 autoload declared — classes may not be found.";
         }
 
         return ['errors' => $errors, 'warnings' => $warnings, 'name' => $name];
@@ -59,6 +60,27 @@ class ModuleValidator
         }
 
         return ['errors' => $errors, 'warnings' => $warnings, 'name' => $name];
+    }
+
+    protected function validateFunctions(string $prefix, array $metadata, string $inheritedPrefix): void
+    {
+        $functions = $metadata['functions'] ?? [];
+
+        foreach ($functions as $fnName => $fnCfg) {
+            $fnLabel = $prefix . ' > ' . $fnName;
+
+            $fnPrefix = $fnCfg['route_prefix'] ?? '';
+            $effectivePrefix = $fnPrefix !== '' ? $fnPrefix : $inheritedPrefix;
+
+            $this->validateRouteConfiguration($fnLabel, $fnCfg, $effectivePrefix);
+            $this->validateRoutes($fnLabel, $fnCfg, $effectivePrefix);
+
+            $children = $fnCfg['functions'] ?? [];
+
+            if ($children !== []) {
+                $this->validateFunctions($fnLabel, $fnCfg, $effectivePrefix);
+            }
+        }
     }
 
     protected function validateRequiredFields(string $name, array $metadata): void
@@ -94,22 +116,27 @@ class ModuleValidator
         }
     }
 
-    protected function validateRouteConfiguration(string $name, array $metadata): void
+    protected function validateRouteConfiguration(string $name, array $metadata, string $inheritedPrefix): void
     {
-        if ($metadata['type'] !== 'route') {
+        $type = $metadata['type'] ?? 'support';
+
+        if ($type !== 'route') {
             return;
         }
 
-        if (!isset($metadata['route_prefix']) || $metadata['route_prefix'] === '') {
+        $hasPrefix = isset($metadata['route_prefix']) && $metadata['route_prefix'] !== '';
+        $hasRoutes = isset($metadata['routes']) && is_array($metadata['routes']) && $metadata['routes'] !== [];
+
+        if (!$hasPrefix && $inheritedPrefix === '') {
             throw ModuleException::routeWithoutPrefix($name);
         }
 
-        if (!isset($metadata['routes']) || !is_array($metadata['routes']) || $metadata['routes'] === []) {
+        if (!$hasRoutes) {
             throw ModuleException::routeWithoutRoutes($name);
         }
     }
 
-    protected function validateRoutes(string $name, array $metadata): void
+    protected function validateRoutes(string $name, array $metadata, string $inheritedPrefix): void
     {
         $routes = $metadata['routes'] ?? [];
 

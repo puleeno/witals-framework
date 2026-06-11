@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Witals\Framework\Module\Contracts;
 
+use Witals\Framework\Module\ModuleFunction;
+
 interface ModuleInterface
 {
     public function getName(): string;
@@ -33,4 +35,10 @@ interface ModuleInterface
     public function getRoutePrefix(): string;
 
     public function getRoutes(): array;
+
+    public function getFunctions(): array;
+
+    public function hasFunction(string $name): bool;
+
+    public function getFunction(string $name): ?ModuleFunction;
 }
