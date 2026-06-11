@@ -34,4 +34,9 @@ abstract class Job implements ShouldQueue
     {
         $this->jobId = $id;
     }
+
+    public function middleware(): array
+    {
+        return [];
+    }
 }

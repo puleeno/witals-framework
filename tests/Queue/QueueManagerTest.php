@@ -7,6 +7,7 @@ namespace Witals\Framework\Tests\Queue;
 use PHPUnit\Framework\TestCase;
 use Witals\Framework\Queue\QueueManager;
 use Witals\Framework\Queue\Worker;
+use Witals\Framework\Queue\Contracts\FailedJobProviderInterface;
 use Witals\Framework\Queue\Contracts\QueueInterface;
 use Witals\Framework\Queue\Contracts\QueueWorkerInterface;
 
@@ -181,5 +182,74 @@ class QueueManagerTest extends TestCase
         $manager->setLogger($logger);
 
         $this->addToAssertionCount(1);
+    }
+
+    public function test_failed_job_provider_default_null(): void
+    {
+        $manager = new QueueManager();
+
+        $this->assertNull($manager->getFailedJobProvider());
+    }
+
+    public function test_set_failed_job_provider(): void
+    {
+        $provider = $this->createMock(FailedJobProviderInterface::class);
+        $manager = new QueueManager();
+        $manager->setFailedJobProvider($provider);
+
+        $this->assertSame($provider, $manager->getFailedJobProvider());
+    }
+
+    public function test_log_failed_job_without_provider_does_nothing(): void
+    {
+        $manager = new QueueManager();
+        $job = new \stdClass();
+
+        $manager->logFailedJob('sync', 'default', $job, new \RuntimeException('fail'));
+
+        $this->assertNull($manager->getFailedJobProvider());
+    }
+
+    public function test_log_failed_job_with_provider(): void
+    {
+        $provider = $this->createMock(FailedJobProviderInterface::class);
+        $provider->expects($this->once())
+            ->method('log')
+            ->with(
+                $this->equalTo('sync'),
+                $this->equalTo('default'),
+                $this->stringContains('stdClass'),
+                $this->isInstanceOf(\RuntimeException::class),
+            );
+
+        $manager = new QueueManager();
+        $manager->setFailedJobProvider($provider);
+        $job = new \stdClass();
+
+        $manager->logFailedJob('sync', 'default', $job, new \RuntimeException('fail'));
+    }
+
+    public function test_log_failed_job_serializes_payload(): void
+    {
+        $provider = $this->createMock(FailedJobProviderInterface::class);
+        $provider->expects($this->once())
+            ->method('log')
+            ->with(
+                $this->anything(),
+                $this->anything(),
+                $this->callback(function (string $payload) {
+                    $data = @unserialize($payload);
+                    return is_array($data)
+                        && isset($data['displayName'])
+                        && isset($data['job']);
+                }),
+                $this->anything(),
+            );
+
+        $manager = new QueueManager();
+        $manager->setFailedJobProvider($provider);
+
+        $job = new \stdClass();
+        $manager->logFailedJob('sync', 'default', $job, new \RuntimeException('fail'));
     }
 }

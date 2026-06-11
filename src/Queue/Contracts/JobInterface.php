@@ -39,4 +39,6 @@ interface JobInterface
     public function maxExceptions(): ?int;
 
     public function backoff(): ?array;
+
+    public function middleware(): array;
 }

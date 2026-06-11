@@ -30,6 +30,12 @@ class RequestHandler
     public function handle(Request $request): Response
     {
         try {
+            // 0. Maintenance mode check
+            $maintenanceResponse = $this->checkMaintenanceMode($request);
+            if ($maintenanceResponse !== null) {
+                return $maintenanceResponse;
+            }
+
             // 1. Init (Request Start)
             $this->init($request);
 
@@ -63,6 +69,72 @@ class RequestHandler
 
         // 2. Lifecycle: Request Start
         $this->app->lifecycle()->onRequestStart($request);
+    }
+
+    /**
+     * Check if the application is in maintenance mode.
+     */
+    protected function checkMaintenanceMode(Request $request): ?Response
+    {
+        $file = $this->app->basePath('storage/framework/down');
+
+        if (!file_exists($file)) {
+            return null;
+        }
+
+        $data = unserialize(file_get_contents($file));
+        if (!is_array($data)) {
+            return null;
+        }
+
+        $clientIp = $_SERVER['REMOTE_ADDR'] ?? $request->header('X-Forwarded-For') ?? '';
+
+        foreach ($data['allowed'] ?? [] as $allowed) {
+            if ($this->ipMatches($clientIp, $allowed)) {
+                return null;
+            }
+        }
+
+        $status = (int) ($data['status'] ?? 503);
+        $message = $data['message'] ?? 'Application is in maintenance mode.';
+        $retry = $data['retry'] ?? null;
+
+        $body = json_encode([
+            'error' => 'Maintenance mode',
+            'message' => $message,
+        ], JSON_UNESCAPED_SLASHES);
+
+        $response = new Response($body, $status, [
+            'Content-Type' => 'application/json',
+            'X-Maintenance-Mode' => 'true',
+        ]);
+
+        if ($retry !== null) {
+            $response = $response->withHeader('Retry-After', (string) $retry);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Check if an IP matches a CIDR or exact IP.
+     */
+    protected function ipMatches(string $ip, string $rule): bool
+    {
+        if ($rule === '*') {
+            return true;
+        }
+
+        if (str_contains($rule, '/')) {
+            [$subnet, $bits] = explode('/', $rule, 2);
+            $ip = ip2long($ip);
+            $subnet = ip2long($subnet);
+            $mask = -1 << (32 - (int) $bits);
+
+            return ($ip & $mask) === ($subnet & $mask);
+        }
+
+        return $ip === $rule;
     }
 
     /**

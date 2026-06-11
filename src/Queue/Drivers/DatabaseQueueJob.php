@@ -177,6 +177,21 @@ class DatabaseQueueJob implements JobInterface
         return null;
     }
 
+    public function middleware(): array
+    {
+        $payload = unserialize($this->job->payload);
+
+        if ($payload !== false && isset($payload['job'])) {
+            $instance = unserialize($payload['job']);
+
+            if ($instance !== false && method_exists($instance, 'middleware')) {
+                return $instance->middleware();
+            }
+        }
+
+        return [];
+    }
+
     public function getJob(): object
     {
         return $this->job;

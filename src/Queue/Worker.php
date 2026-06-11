@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Witals\Framework\Queue;
 
 use Witals\Framework\Queue\Contracts\JobInterface;
+use Witals\Framework\Queue\Contracts\JobMiddlewareInterface;
 use Witals\Framework\Queue\Contracts\QueueWorkerInterface;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -72,7 +73,7 @@ class Worker implements QueueWorkerInterface
         try {
             $this->logInfo("Processing job: {$job->displayName()} [{$job->jobId()}]");
 
-            $job->handle();
+            $this->runJobWithMiddleware($job);
 
             if (!$job->isDeleted() && !$job->isReleased()) {
                 $job->delete();
@@ -96,6 +97,58 @@ class Worker implements QueueWorkerInterface
                 $this->logInfo("Job released for retry: {$job->displayName()} [{$job->jobId()}] (attempt {$attempts})");
             }
         }
+    }
+
+    protected function runJobWithMiddleware(JobInterface $job): void
+    {
+        $middleware = $job->middleware();
+
+        if ($middleware === []) {
+            $job->handle();
+            return;
+        }
+
+        $pipeline = $middleware;
+        $pipeline[] = function (object $job) {
+            $job->handle();
+        };
+
+        $this->sendJobThroughPipeline($job, $pipeline);
+    }
+
+    protected function sendJobThroughPipeline(object $job, array $pipeline): void
+    {
+        $middleware = array_shift($pipeline);
+
+        if ($middleware === null) {
+            return;
+        }
+
+        if ($middleware instanceof \Closure) {
+            $middleware($job, function ($nextJob) use ($pipeline) {
+                $this->sendJobThroughPipeline($nextJob, $pipeline);
+            });
+            return;
+        }
+
+        if ($middleware instanceof JobMiddlewareInterface) {
+            $middleware->handle($job, function ($nextJob) use ($pipeline) {
+                $this->sendJobThroughPipeline($nextJob, $pipeline);
+            });
+            return;
+        }
+
+        if (is_string($middleware)) {
+            $instance = app($middleware);
+            if ($instance instanceof JobMiddlewareInterface) {
+                $instance->handle($job, function ($nextJob) use ($pipeline) {
+                    $this->sendJobThroughPipeline($nextJob, $pipeline);
+                });
+                return;
+            }
+        }
+
+        throw new \RuntimeException('Invalid job middleware: ' . gettype($middleware));
     }
 
     protected function getBackoff(JobInterface $job, array $options): int

@@ -185,4 +185,19 @@ class RedisQueueJob implements JobInterface
 
         return null;
     }
+
+    public function middleware(): array
+    {
+        $data = unserialize($this->payload);
+
+        if ($data !== false && isset($data['job'])) {
+            $instance = unserialize($data['job']);
+
+            if ($instance !== false && method_exists($instance, 'middleware')) {
+                return $instance->middleware();
+            }
+        }
+
+        return [];
+    }
 }

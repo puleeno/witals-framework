@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Witals\Framework\Queue\Contracts;
+
+interface JobMiddlewareInterface
+{
+    public function handle(object $job, \Closure $next): void;
+}

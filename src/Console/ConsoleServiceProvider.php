@@ -18,6 +18,8 @@ class ConsoleServiceProvider extends ServiceProvider
             $kernel->register(DbSeedCommand::class);
             $kernel->register(ConfigCacheCommand::class);
             $kernel->register(ConfigClearCommand::class);
+            $kernel->register(DownCommand::class);
+            $kernel->register(UpCommand::class);
 
             return $kernel;
         });
