@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use PrestoWorld\Contracts\ServiceProviderInterface;
 use Witals\Framework\Application;
 
 /**
@@ -12,7 +11,7 @@ use Witals\Framework\Application;
  * 
  * Base class for all service providers
  */
-abstract class ServiceProvider implements ServiceProviderInterface
+abstract class ServiceProvider
 {
     protected Application $app;
 

@@ -51,7 +51,7 @@ class WordPressConfigTransformer implements ConfigurationTransformerInterface
                 // Parse value (remove quotes)
                 $value = $this->parseValue($valueRaw);
 
-                // Map standard WP keys to PrestoWorld/Witals keys
+                // Map standard WP keys to application keys
                 if (isset(self::KEY_MAPPING[$key])) {
                     $mappedKey = self::KEY_MAPPING[$key];
                     $config[$mappedKey] = $value;

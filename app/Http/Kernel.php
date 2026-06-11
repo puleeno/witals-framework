@@ -18,6 +18,7 @@ class Kernel implements KernelContract
 {
 
 
+    protected Application $app;
     protected LoggerInterface $logger;
 
     public function __construct(Application $app, LoggerInterface $logger)
@@ -112,10 +113,15 @@ class Kernel implements KernelContract
             return Response::html((string)$result);
 
         } catch (\Throwable $e) {
-            $this->logger->error("Request error: " . $e->getMessage(), ['exception' => $e]);
+            $this->logger->error("Request error: " . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            error_log("[Kernel Error] " . $e->getMessage() . "\n" . $e->getTraceAsString());
             return Response::json([
                 'error' => 'Internal Server Error',
                 'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ], 500);
         }
     }
@@ -172,111 +178,10 @@ class Kernel implements KernelContract
             }
         }
 
-        // Demo Data: Load posts via CycleORM
-        $postsData = [];
-        $postsError = null;
-        try {
-            if ($this->app->has(\Cycle\ORM\ORMInterface::class)) {
-                $orm = $this->app->make(\Cycle\ORM\ORMInterface::class);
-                $repo = $orm->getRepository(\App\Models\Post::class);
-                
-                // Fetch 5 latest items (posts or pages)
-                // Note: Using select() directly from repository might check if SelectRepository is used
-                $posts = $repo->select()
-                    ->where('status', 'publish')
-                    ->where('type', 'in', ['post', 'page'])
-                    ->orderBy('date', 'DESC')
-                    ->limit(5)
-                    ->fetchAll();
-
-                foreach ($posts as $post) {
-                    $postsData[] = [
-                        'id' => $post->id,
-                        'title' => $post->title,
-                        'type' => $post->type,
-                        'slug' => $post->slug,
-                        'url' => get_permalink($post),
-                        'date' => $post->date->format('Y-m-d H:i:s'),
-                    ];
-                }
-            } else {
-                $postsError = 'ORM Not Configured';
-            }
-        } catch (\Throwable $e) {
-            $postsError = 'ORM Error: ' . $e->getMessage();
-        }
-
-        // Fetch Web Services
-        $webServices = [];
-        try {
-            if ($this->app->has(\Cycle\Database\DatabaseProviderInterface::class)) {
-                $db = $this->app->make(\Cycle\Database\DatabaseProviderInterface::class)->database();
-                $webServices = $db->select('*')
-                    ->from('optilarity_web_services')
-                    ->where('status', 'active')
-                    ->limit(4)
-                    ->run()
-                    ->fetchAll();
-            }
-        } catch (\Throwable $e) {
-            error_log("Home WebServices Error: " . $e->getMessage());
-        }
-
-        // Use Theme Engine to render if not a JSON request
-        if (str_contains($request->header('accept', ''), 'text/html') || !$request->header('accept')) {
-            $themeManager = $this->app->make(\PrestoWorld\Theme\ThemeManager::class);
-            $hooks = $this->app->make('hooks');
-
-
-            // Trigger Action
-            $hooks->doAction('pre_render_home');
-
-            // Apply Filter to Title
-            $pageTitle = $hooks->applyFilters('home_page_title', 'Home');
-            
-            // Allow dynamic theme switching for demo
-            if ($targetTheme = $request->query('theme')) {
-                $themeManager->setActiveTheme($targetTheme);
-            }
-            $themeManager->loadActiveTheme();
-
-            $html = $themeManager->render('index', [
-                'title' => $pageTitle, // Used filtered title
-                'posts' => $postsData,
-                'web_services' => $webServices,
-                'posts_error' => $postsError,
-                'themes' => $themeManager->all()
-            ]);
-
-            // Apply Native Filter to Content
-            $html = $hooks->applyFilters('home_page_content', $html);
-
-
-
-            // Apply GLOBAL Filter as the very last step (MU-Plugins, etc)
-            $html = $hooks->applyFilters('presto.response_body', $html);
-
-            return \Witals\Framework\Http\Response::html($html);
-        }
-
-        $themesInfo = [];
-        $themeManager = $this->app->make(\PrestoWorld\Theme\ThemeManager::class);
-        foreach ($themeManager->all() as $theme) {
-            $themesInfo[] = [
-                'name' => $theme->getName(),
-                'title' => $theme->getTitle(),
-                'type' => $theme->getType(),
-                'active' => $theme->isActive()
-            ];
-        }
-
         return Response::json([
-            'message' => 'Welcome to PrestoWorld Native!',
+            'message' => 'Welcome!',
             'runtime' => $this->getEnvironmentName(),
             'modules' => $modules,
-            'wordpress_enabled' => config('modules.enabled.wordpress') ? 'Yes' : 'No',
-            'latest_posts' => $postsData,
-            'available_themes' => $themesInfo
         ]);
     }
 

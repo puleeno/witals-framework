@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Foundation;
 
 use Witals\Framework\Application as BaseApplication;
-use PrestoWorld\Contracts\ServiceProviderInterface;
 use App\Foundation\Module\ModuleManager;
 
 /**
- * PrestoWorld Application
+ * Application
  * 
  * Extends Witals Framework Application with Service Provider support
  */
@@ -43,7 +42,16 @@ class Application extends BaseApplication
     {
         // If string, instantiate
         if (is_string($provider)) {
-            $provider = new $provider($this);
+            try {
+                $provider = new $provider($this);
+            } catch (\Throwable $e) {
+                error_log(sprintf(
+                    '[App] Failed to instantiate provider %s: %s',
+                    is_string($provider) ? $provider : get_class($provider),
+                    $e->getMessage()
+                ));
+                return null;
+            }
         }
 
         $providerClass = get_class($provider);
@@ -53,29 +61,33 @@ class Application extends BaseApplication
             return $this->serviceProviders[$providerClass];
         }
 
-        // Handle PrestoWorld specific logic if it implements the interface
-        if ($provider instanceof ServiceProviderInterface) {
-            // Check if should load
-            if (!$provider->shouldLoad()) {
-                return $provider;
-            }
-
-            // Register dependencies first
-            foreach ($provider->dependencies() as $dependency) {
-                $this->register($dependency);
-            }
-        }
-
         // Register the provider
         if (method_exists($provider, 'register')) {
-            $provider->register();
+            try {
+                $provider->register();
+            } catch (\Throwable $e) {
+                error_log(sprintf(
+                    '[App] Failed to register provider %s: %s',
+                    $providerClass,
+                    $e->getMessage()
+                ));
+                return null;
+            }
         }
         
         $this->serviceProviders[$providerClass] = $provider;
         $this->loadedProviders[$providerClass] = true;
 
         if ($this->booted && method_exists($provider, 'boot')) {
-            $provider->boot();
+            try {
+                $provider->boot();
+            } catch (\Throwable $e) {
+                error_log(sprintf(
+                    '[App] Failed to boot provider %s: %s',
+                    $providerClass,
+                    $e->getMessage()
+                ));
+            }
         }
 
         return $provider;
@@ -98,7 +110,15 @@ class Application extends BaseApplication
     {
         foreach ($this->serviceProviders as $class => $provider) {
             if (!isset($this->bootedProviders[$class])) {
-                $provider->boot();
+                try {
+                    $provider->boot();
+                } catch (\Throwable $e) {
+                    error_log(sprintf(
+                        '[App] Failed to boot provider %s: %s',
+                        $class,
+                        $e->getMessage()
+                    ));
+                }
                 $this->bootedProviders[$class] = true;
             }
         }
@@ -126,11 +146,11 @@ class Application extends BaseApplication
         );
 
         $this->registerProviders([
+            \Witals\Framework\Auth\AuthServiceProvider::class,
             \App\Providers\LogServiceProvider::class,
             \App\Providers\DatabaseServiceProvider::class,
             \App\Providers\ViewServiceProvider::class,
             \App\Providers\RouteServiceProvider::class,
-            \App\Providers\HookServiceProvider::class,
             \App\Providers\ConsoleServiceProvider::class,
             \App\Providers\AppServiceProvider::class,
         ]);
@@ -209,11 +229,11 @@ class Application extends BaseApplication
     }
 
     /**
-     * Customize the error log destination for PrestoWorld.
+     * Customize the error log destination.
      */
     public function getErrorLogPath(): string
     {
-        return $this->basePath('storage/logs/prestoworld.log');
+        return $this->basePath('storage/logs/app.log');
     }
 
     /**

@@ -37,6 +37,32 @@ class DatabaseServiceProvider extends ServiceProvider
         // 1. Register Database Manager (DBAL)
         $this->singleton(DatabaseProviderInterface::class, function ($app) {
             $dbConfig = $app->config('database');
+            if (!is_array($dbConfig) || empty($dbConfig)) {
+                $dbConfig = [
+                    'default' => env('DB_CONNECTION', 'mysql'),
+                    'databases' => [
+                        'default' => [
+                            'connection' => env('DB_CONNECTION', 'mysql'),
+                        ],
+                    ],
+                    'connections' => [
+                        'mysql' => [
+                            'driver'  => 'mysql',
+                            'host'    => env('DB_HOST', '127.0.0.1'),
+                            'port'    => env('DB_PORT', 3306),
+                            'dbname'  => env('DB_DATABASE', 'app'),
+                            'user'    => env('DB_USERNAME', 'root'),
+                            'password' => env('DB_PASSWORD', ''),
+                        ],
+                        'sqlite' => [
+                            'driver'  => 'sqlite',
+                            'options' => [
+                                'memory' => true,
+                            ],
+                        ],
+                    ],
+                ];
+            }
             $driver = $dbConfig['default'] ?? env('DB_CONNECTION', 'mysql');
             
             $config = new DatabaseConfig($dbConfig);
@@ -146,7 +172,6 @@ class DatabaseServiceProvider extends ServiceProvider
         
         $finder = (new Finder())->files()->in([
             $app->basePath('app/Models'),
-            $app->basePath('vendor/prestoworld/wp-bridge/src/Sandbox/Models'),
         ]);
         
         // Check if modules have models

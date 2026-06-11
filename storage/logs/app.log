@@ -1,0 +1,10 @@
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Could not ensure registry table: Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Could not ensure registry table: Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Failed to sync table 'orders': Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Failed to sync table 'orders': Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Failed to sync table 'invoices': Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Failed to sync table 'invoices': Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Failed to update registry: Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] ModuleSchemaManager: Failed to update registry: Unable to create Database, no presets for 'mysql' found
+[11-Jun-2026 03:56:18 UTC] RouterFactory: locales= isMultilingual=NO
+[11-Jun-2026 03:56:18 UTC] RouterFactory: locales= isMultilingual=NO

@@ -8,7 +8,6 @@
         "psr-4": {
             "Witals\\Framework\\": "src/",
             "App\\": "app/",
-            "PrestoWorld\\": "presto/",
             "Modules\\": "modules/"
         },
         "files": [

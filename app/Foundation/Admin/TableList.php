@@ -7,9 +7,9 @@ namespace App\Foundation\Admin;
 use Witals\Framework\Http\Request;
 
 /**
- * PrestoWorld TableList — Abstract Base
+ * TableList — Abstract Base
  *
- * The PrestoWorld equivalent of WordPress's WP_List_Table.
+ * Equivalent of WordPress's WP_List_Table.
  * Every admin data-entry screen in every module extends this class.
  *
  * Design goals:
@@ -224,9 +224,9 @@ abstract class TableList
 
     protected function renderTopBar(): string
     {
-        $html  = '<div class="presto-table-topbar">';
+        $html  = '<div class="admin-table-topbar">';
         $html .= $this->renderViewFilters();
-        $html .= '<div class="presto-table-topbar-actions">';
+        $html .= '<div class="admin-table-topbar-actions">';
         $html .= $this->isSearchable() ? $this->renderSearchBox() : '';
         $html .= '</div>';
         $html .= '</div>';
@@ -240,7 +240,7 @@ abstract class TableList
             return '';
         }
 
-        $html = '<ul class="presto-subsubsub">';
+        $html = '<ul class="admin-subsubsub">';
         foreach ($filters as $i => $filter) {
             $active  = $filter->current ? ' class="current"' : '';
             $url     = $this->addQueryArg([$filter->queryVar => $filter->queryValue]);
@@ -256,21 +256,21 @@ abstract class TableList
         $value = htmlspecialchars($this->search, ENT_QUOTES);
         $label = "Tìm kiếm {$this->pluralName}...";
         return <<<HTML
-        <div class="presto-search-box">
+        <div class="admin-search-box">
             <div class="search-input-wrap">
                 <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <input type="search" id="presto-search-input" name="s" value="{$value}" placeholder="{$label}" />
+                <input type="search" id="admin-search-input" name="s" value="{$value}" placeholder="{$label}" />
             </div>
-            <button type="submit" class="presto-btn presto-btn-primary">Tìm kiếm</button>
+            <button type="submit" class="admin-btn admin-btn-primary">Tìm kiếm</button>
         </div>
         HTML;
     }
 
     protected function renderTable(): string
     {
-        $html  = '<div class="presto-table-wrap">';
+        $html  = '<div class="admin-table-wrap">';
         $html .= $this->renderBulkActionsBar('top');
-        $html .= '<div class="presto-list-table" role="grid">';
+        $html .= '<div class="admin-list-table" role="grid">';
         $html .= $this->renderTableHead();
         $html .= $this->renderTableBody();
         $html .= $this->renderTableFoot();
@@ -401,7 +401,7 @@ abstract class TableList
                 $html   .= "<option value=\"{$action->key}\"{$confirm}>{$action->label}</option>";
             }
             $html .= '</select>';
-            $html .= "<button type=\"button\" class=\"presto-btn presto-btn-secondary presto-bulk-apply\" data-position=\"{$position}\">Apply</button>";
+            $html .= "<button type=\"button\" class=\"admin-btn admin-btn-secondary admin-bulk-apply\" data-position=\"{$position}\">Apply</button>";
             $html .= '</div>';
         }
 
