@@ -19,6 +19,9 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
     protected array $instances = [];
 
+    /** Modules currently being loaded (for cycle detection) */
+    protected array $loading = [];
+
     protected bool $discovered = false;
 
     protected array $modulePaths = [];
@@ -312,42 +315,53 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             return null;
         }
 
-        $meta = $this->metadataMap[$name];
-        $path = $meta['_path'];
-
-        // Try to instantiate the proper entry class from manifest
-        $manifest = new ModuleManifest($path);
-        $entryClass = $manifest->entryClass();
-
-        if ($entryClass !== null && class_exists($entryClass)) {
-            $instance = new $entryClass($this->app, $path, $meta);
-        } else {
-            $instance = new Module($this->app, $path, $meta);
+        // Circular dependency detection
+        if (isset($this->loading[$name])) {
+            $chain = implode(' -> ', array_keys($this->loading)) . ' -> ' . $name;
+            throw \Witals\Framework\Module\Exceptions\ModuleException::circularDependency($name, $chain);
         }
 
-        if (!$instance instanceof Module) {
-            return null;
-        }
+        $this->loading[$name] = true;
 
         try {
+            $meta = $this->metadataMap[$name];
+            $path = $meta['_path'];
+
+            $manifest = new ModuleManifest($path);
+            $entryClass = $manifest->entryClass();
+
+            if ($entryClass !== null && class_exists($entryClass)) {
+                $instance = new $entryClass($this->app, $path, $meta);
+            } else {
+                $instance = new Module($this->app, $path, $meta);
+            }
+
+            if (!$instance instanceof Module) {
+                unset($this->loading[$name]);
+                return null;
+            }
+
             $instance->register();
             $this->loadDependencies($instance);
+            $this->validateVersionConstraints($name, $meta);
             $instance->boot();
+
+            $entryClass = $manifest->entryClass();
+            if ($entryClass !== null && !$this->app->has($entryClass)) {
+                $this->app->instance($entryClass, $instance);
+            }
+
+            $this->instances[$name] = $instance;
+            $this->loaded[$name] = true;
+
+            unset($this->loading[$name]);
+
+            return $instance;
         } catch (\Throwable $e) {
+            unset($this->loading[$name]);
             error_log("Failed to load module {$name}: {$e->getMessage()}");
             return null;
         }
-
-        // Bind the entry class to container for direct resolution
-        $entryClass = $manifest->entryClass();
-        if ($entryClass !== null && !$this->app->has($entryClass)) {
-            $this->app->instance($entryClass, $instance);
-        }
-
-        $this->instances[$name] = $instance;
-        $this->loaded[$name] = true;
-
-        return $instance;
     }
 
     public function loadSupportModules(): void
@@ -381,7 +395,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
     protected function loadDependencies(Module $module): void
     {
-        foreach ($module->getDependencies() as $dep) {
+        foreach ($module->getDependencyNames() as $dep) {
             if (isset($this->loaded[$dep])) {
                 continue;
             }
@@ -391,6 +405,25 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             }
 
             $this->load($dep);
+        }
+    }
+
+    protected function validateVersionConstraints(string $name, array $meta): void
+    {
+        $deps = $meta['dependencies'] ?? [];
+        if (!is_array($deps) || array_is_list($deps)) {
+            return;
+        }
+
+        foreach ($deps as $depName => $constraint) {
+            if (!isset($this->instances[$depName])) {
+                continue;
+            }
+
+            $depVersion = $this->instances[$depName]->getVersion();
+            if (!VersionConstraint::satisfies($depVersion, (string) $constraint)) {
+                throw Exceptions\ModuleException::versionMismatch($name, $depName, (string) $constraint, $depVersion);
+            }
         }
     }
 

@@ -96,6 +96,11 @@ class Module implements ModuleInterface
         return is_array($deps) ? array_keys($deps) : $deps;
     }
 
+    public function getDependencyNames(): array
+    {
+        return $this->getDependencies();
+    }
+
     public function getProvides(): array
     {
         return $this->metadata['provides'] ?? [];

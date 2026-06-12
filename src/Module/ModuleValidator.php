@@ -161,9 +161,12 @@ class ModuleValidator
 
     protected function validateDependencies(string $name, array $metadata, array $allMetadata): void
     {
-        $depends = $metadata['depends'] ?? [];
+        $dependencies = $metadata['dependencies'] ?? [];
 
-        foreach ($depends as $dep) {
+        // Handle both list ["schema"] and map {"schema": "^1.0.0"}
+        $depNames = is_array($dependencies) ? (array_is_list($dependencies) ? $dependencies : array_keys($dependencies)) : [];
+
+        foreach ($depNames as $dep) {
             if (!isset($allMetadata[$dep])) {
                 throw ModuleException::dependsOnMissing($name, $dep);
             }

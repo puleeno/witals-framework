@@ -24,9 +24,18 @@ class ModuleServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Snapshot providers before module loading
+        // (modules register their providers during loadModule()->register(),
+        //  but $this->app->booted is still false during bootProviders(),
+        //  so we must explicitly boot them after loading.)
+        $previousProviders = $this->app->getLoadedProvidersKeys();
+
         // Load all support modules at boot (no routes, just services)
         $manager = $this->app->make(ModuleManager::class);
         $manager->loadSupportModules();
+
+        // Boot any service providers that were registered by modules
+        $this->app->bootNewProviders($previousProviders);
 
         // Register console commands
         $kernel = $this->app->make(\Witals\Framework\Console\Kernel::class);

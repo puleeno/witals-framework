@@ -154,6 +154,23 @@ class ModuleException extends RuntimeException
         );
     }
 
+    public static function versionMismatch(
+        string $module,
+        string $dependency,
+        string $constraint,
+        string $actualVersion
+    ): self {
+        return new self(
+            sprintf(
+                '[Module] "%s": requires "%s" (%s) but installed version is %s.',
+                $module,
+                $dependency,
+                $constraint,
+                $actualVersion
+            )
+        );
+    }
+
     public static function moduleFileNotFound(string $path): self
     {
         return new self(

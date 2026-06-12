@@ -416,6 +416,28 @@ class Application extends Container
     }
 
     /**
+     * Get the keys (class names) of all loaded providers.
+     */
+    public function getLoadedProvidersKeys(): array
+    {
+        return array_keys($this->loadedProviders);
+    }
+
+    /**
+     * Boot any service providers that were registered since $previousKeys.
+     */
+    public function bootNewProviders(array $previousKeys): void
+    {
+        foreach ($this->loadedProviders as $class => $provider) {
+            if (!in_array($class, $previousKeys, true)) {
+                if (method_exists($provider, 'boot')) {
+                    $provider->boot();
+                }
+            }
+        }
+    }
+
+    /**
      * Register a service provider with the application.
      */
     public function register(object|string $provider): mixed
