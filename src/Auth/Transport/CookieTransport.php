@@ -31,15 +31,17 @@ class CookieTransport implements HttpTransportInterface
         $domain = ''; // default
         $secure = true;
         $httponly = true;
+        $sameSite = 'Lax';
         
         $cookieValue = sprintf(
-            '%s=%s; Path=%s; %s%s%s',
+            '%s=%s; Path=%s; %s%s%sSameSite=%s',
             $this->cookieName,
             urlencode($value),
             $path,
             $expires ? 'Expires=' . gmdate('D, d M Y H:i:s T', $expires) . '; ' : '',
             $secure ? 'Secure; ' : '',
-            $httponly ? 'HttpOnly; ' : ''
+            $httponly ? 'HttpOnly; ' : '',
+            $sameSite
         );
 
         return $response->withHeader('Set-Cookie', $cookieValue);
@@ -48,7 +50,7 @@ class CookieTransport implements HttpTransportInterface
     public function removeToken(Request $request, Response $response, TokenInterface $token): Response
     {
          $cookieValue = sprintf(
-            '%s=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly',
+            '%s=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax',
             $this->cookieName
         );
         return $response->withHeader('Set-Cookie', $cookieValue);

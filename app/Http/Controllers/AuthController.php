@@ -29,11 +29,11 @@ class AuthController
         // If already authenticated and is admin, redirect to dashboard
         $auth = $this->app->make(AuthContextInterface::class);
         if ($auth->getToken() !== null) {
-            $redirect = $request->query('redirect', '/dashboard');
+            $redirect = $this->safeRedirect($request->query('redirect', '/dashboard'));
             return Response::html('', 302, ['Location' => $redirect]);
         }
 
-        $redirect = htmlspecialchars($request->query('redirect', '/dashboard'), ENT_QUOTES);
+        $redirect = $this->safeRedirect($request->query('redirect', '/dashboard'));
         $error = $request->query('error', '');
         $success = $request->query('success', '');
         
@@ -260,6 +260,7 @@ class AuthController
 
                     <form method="POST" action="/login">
                         <input type="hidden" name="redirect" value="{$redirect}">
+                        <input type="hidden" name="_token" value="{$this->csrfToken()}">
 
                         <div class="form-group">
                             <label for="email">Email</label>
@@ -303,12 +304,18 @@ class AuthController
     {
         $email = $request->post('email', '');
         $password = $request->post('password', '');
-        $redirect = $request->post('redirect', '/dashboard');
+        $redirect = $this->safeRedirect($request->post('redirect', '/dashboard'));
         $remember = (bool) $request->post('remember', false);
 
         if (empty($email) || empty($password)) {
             return Response::html('', 302, [
                 'Location' => '/login?error=' . urlencode('Vui lòng nhập email và mật khẩu') . '&redirect=' . urlencode($redirect)
+            ]);
+        }
+
+        if (!$this->validateCsrf($request->post('_token', ''))) {
+            return Response::html('', 302, [
+                'Location' => '/login?error=' . urlencode('Invalid or expired session token. Please try again.') . '&redirect=' . urlencode($redirect)
             ]);
         }
 
@@ -423,7 +430,7 @@ class AuthController
                     $role = 'user'; // Default
                     if ($capabilitiesMeta && !empty($capabilitiesMeta['meta_value'])) {
                         // WordPress stores roles as a serialized array: a:1:{s:13:"administrator";b:1;}
-                        $data = @unserialize($capabilitiesMeta['meta_value']);
+                        $data = unserialize($capabilitiesMeta['meta_value'], ['allowed_classes' => false]);
                         if (is_array($data)) {
                             $roles = array_keys($data);
                             // Check if they have administrator role
@@ -450,5 +457,37 @@ class AuthController
         }
 
         return null;
+    }
+
+    private function safeRedirect(string $url): string
+    {
+        if ($url === '' || str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        return '/dashboard';
+    }
+
+    private function csrfToken(): string
+    {
+        $token = $_SESSION['_csrf_token'] ?? '';
+
+        if ($token === '') {
+            $token = bin2hex(random_bytes(32));
+            $_SESSION['_csrf_token'] = $token;
+        }
+
+        return $token;
+    }
+
+    private function validateCsrf(string $token): bool
+    {
+        $expected = $_SESSION['_csrf_token'] ?? '';
+
+        if ($expected === '' || $token === '') {
+            return false;
+        }
+
+        return hash_equals($expected, $token);
     }
 }
