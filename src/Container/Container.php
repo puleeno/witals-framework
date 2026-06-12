@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Witals\Framework\Container;
 
 use Closure;
-use Exception;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionNamedType;
 
 use Witals\Framework\Contracts\Container as ContainerContract;
+use Witals\Framework\Container\Exceptions\ContainerException;
+use Witals\Framework\Container\Exceptions\BindingResolutionException;
+use Witals\Framework\Container\Exceptions\NotFoundException;
 
 class Container implements ContainerContract
 {
@@ -75,7 +77,7 @@ class Container implements ContainerContract
         }
 
         if (!isset($this->bindings[$abstract])) {
-            throw new Exception("Cannot extend abstract [{$abstract}] because it has not been bound.");
+            throw new NotFoundException("Cannot extend abstract [{$abstract}] because it has not been bound.");
         }
 
         $concrete = $this->bindings[$abstract]['concrete'];
@@ -201,11 +203,11 @@ class Container implements ContainerContract
         try {
             $reflector = new ReflectionClass($concrete);
         } catch (ReflectionException $e) {
-            throw new Exception("Target class [$concrete] does not exist.", 0, $e);
+            throw new BindingResolutionException("Target class [$concrete] does not exist.", 0, $e);
         }
 
         if (!$reflector->isInstantiable()) {
-            throw new Exception("Target [$concrete] is not instantiable.");
+            throw new BindingResolutionException("Target [$concrete] is not instantiable.");
         }
 
         $constructor = $reflector->getConstructor();
@@ -252,13 +254,13 @@ class Container implements ContainerContract
 
                 $declaringClass = $dependency->getDeclaringClass();
                 $name = $declaringClass ? $declaringClass->getName() : 'Closure/Function';
-                throw new \Exception("Unresolvable dependency [{$dependency->name}] in {$name}");
+                throw new ContainerException("Unresolvable dependency [{$dependency->name}] in {$name}");
             }
 
             // 3. Resolve the class dependency.
             try {
                 $results[] = $this->make($type->getName());
-            } catch (Exception $e) {
+            } catch (\Exception $e) {
                 if ($dependency->isDefaultValueAvailable()) {
                     $results[] = $dependency->getDefaultValue();
                     continue;
