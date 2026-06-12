@@ -65,7 +65,9 @@ class HandleExceptions
         try {
             $this->app->handleException($e);
         } catch (Throwable $f) {
-            // Last resort: log to PHP error log
+            // Last resort: app's own exception handler (including LoggerInterface)
+            // has failed. Cannot rely on DI here — fall back to native PHP error log.
+            // This is intentionally kept as error_log(), not LoggerInterface.
             error_log($e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             error_log('Critical error during exception handling: ' . $f->getMessage());
         } finally {

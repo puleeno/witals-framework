@@ -97,8 +97,6 @@ class DatabaseServiceProvider extends ServiceProvider
             $env = getenv('APP_ENV') ?: 'production';
             $refresh = (
                 $env === 'local' &&
-                isset($_GET['refresh_schema'])
-            ) || (
                 PHP_SAPI === 'cli' &&
                 in_array('--refresh-schema', $_SERVER['argv'] ?? [], true)
             ) || !file_exists($cacheFile);
