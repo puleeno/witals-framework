@@ -9,6 +9,7 @@ use Psr\Log\LoggerInterface;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Application;
 use Witals\Framework\Contracts\ResettableInterface;
+use Witals\Framework\Contracts\ConcurrentManager;
 
 /**
  * RoadRunner Lifecycle Manager
@@ -40,11 +41,19 @@ class RoadRunnerLifecycle implements LifecycleManager
         $this->workerBootTime = microtime(true);
 
         // Boot services ONCE for the entire worker lifetime
-        // This is a key optimization in RoadRunner
         $this->bootServices();
 
         // Optimize for long-running process
         $this->optimizeForLongRunning();
+
+        // Warm up the concurrent manager (FiberManager with Revolt event loop)
+        // This ensures the event-loop integration is ready before any request.
+        // Traditional servers skip this — FiberManager disables itself.
+        try {
+            $this->app->make(ConcurrentManager::class);
+        } catch (\Throwable) {
+            // Container may not be fully wired during early boot
+        }
     }
 
     public function onRequestStart(Request $request): void

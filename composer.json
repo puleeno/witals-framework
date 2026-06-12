@@ -43,7 +43,8 @@
         "cakephp/chronos": "3.x",
         "symfony/http-client": "6.4.x",
         "symfony/validator": "^7.4",
-        "symfony/translation": "^7.4"
+        "symfony/translation": "^7.4",
+        "revolt/event-loop": "^1.0"
     },
     "suggest": {
         "react/http": "Required for ReactPHP runtime support (^1.9)",

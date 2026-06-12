@@ -80,7 +80,14 @@ class Application extends Container
         });
         
         $this->alias(ExceptionHandlerInterface::class, ExceptionHandler::class);
-        
+
+        // Concurrent / Fiber — enabled for long-running runtimes
+        $this->singleton(\Witals\Framework\Contracts\ConcurrentManager::class, function ($app) {
+            return new \Witals\Framework\Concurrent\FiberManager(
+                enabled: $app->getRuntime()->isLongRunning(),
+            );
+        });
+
         $this->registerConfiguredProviders();
     }
 
