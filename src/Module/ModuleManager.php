@@ -335,9 +335,8 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             }
 
             if ($entry['function'] !== null) {
-                $fn = $module->getFunction(
-                    implode('.', array_slice(explode('.', $entry['function']), 1))
-                );
+                $parts = explode('.', $entry['function']);
+                $fn = $module->getFunction(implode('.', array_slice($parts, 1)));
 
                 if ($fn === null || !$fn->isEnabled()) {
                     continue;
@@ -360,8 +359,9 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
         $this->discover();
 
-        $isFunction = str_contains($name, '.');
-        $moduleName = $isFunction ? explode('.', $name)[0] : $name;
+        $parts = explode('.', $name);
+        $isFunction = count($parts) > 1;
+        $moduleName = $isFunction ? $parts[0] : $name;
 
         if (!isset($this->metadataMap[$moduleName])) {
             return null;
@@ -374,9 +374,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 return null;
             }
 
-            $fn = $module->getFunction(
-                implode('.', array_slice(explode('.', $name), 1))
-            );
+            $fn = $module->getFunction(implode('.', array_slice($parts, 1)));
 
             if ($fn === null) {
                 return null;

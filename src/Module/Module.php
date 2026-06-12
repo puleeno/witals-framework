@@ -18,7 +18,6 @@ class Module implements ModuleInterface
     protected array $flattenedFunctions = [];
 
     protected ?ModuleManifest $manifest = null;
-
     public function __construct(
         protected Application $app,
         protected string $path,
@@ -29,7 +28,7 @@ class Module implements ModuleInterface
             $this->metadata = $this->manifest->toArray();
         }
 
-        $this->buildFunctionTree();
+        $this->buildFlattenedFunctions();
     }
 
     public function manifest(): ?ModuleManifest
@@ -37,31 +36,28 @@ class Module implements ModuleInterface
         return $this->manifest;
     }
 
-    protected function buildFunctionTree(): void
+    protected function buildFlattenedFunctions(): void
     {
         $raw = $this->metadata['functions'] ?? [];
 
-        foreach ($raw as $name => $cfg) {
-            $this->functions[$name] = $this->buildFunctionNode($name, $cfg);
-        }
-
         $this->flattenedFunctions = [];
-        foreach ($this->functions as $fn) {
-            $this->flattenedFunctions += $fn->flatten();
+
+        foreach ($raw as $name => $cfg) {
+            $this->flattenFunction($name, $cfg, null);
         }
     }
 
-    protected function buildFunctionNode(string $name, array $cfg, ?ModuleFunction $parent = null): ModuleFunction
+    protected function flattenFunction(string $name, array $cfg, ?ModuleFunction $parent): void
     {
-        $node = new ModuleFunction($this->getName(), $name, $cfg, $parent);
+        $fn = new ModuleFunction($this->getName(), $name, $cfg, $parent);
+
+        $this->flattenedFunctions[$fn->getFullName()] = $fn;
 
         $children = $cfg['functions'] ?? [];
 
         foreach ($children as $cName => $cCfg) {
-            $node->addChild($this->buildFunctionNode($cName, $cCfg, $node));
+            $this->flattenFunction($cName, $cCfg, $fn);
         }
-
-        return $node;
     }
 
     public function getName(): string
@@ -138,7 +134,7 @@ class Module implements ModuleInterface
 
     public function getFunctions(): array
     {
-        return $this->functions;
+        return $this->flattenedFunctions;
     }
 
     public function hasFunction(string $name): bool

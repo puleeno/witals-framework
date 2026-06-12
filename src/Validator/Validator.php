@@ -14,6 +14,49 @@ class Validator implements ValidatorInterface
     protected array $errors = [];
     protected array $customMessages = [];
     protected array $data = [];
+    protected ?array $rulesIndex = null;
+    protected static array $inlineRulesMap = [
+        'confirmed' => true,
+        'same' => true,
+        'different' => true,
+        'starts_with' => true,
+        'ends_with' => true,
+        'json' => true,
+        'distinct' => true,
+        'present' => true,
+    ];
+
+    protected static array $messages = [
+        'required' => "The {field} field is required.",
+        'email' => "The {field} must be a valid email address.",
+        'min' => "The {field} must be at least {param}.",
+        'max' => "The {field} must not exceed {param}.",
+        'between' => "The {field} must be between {param}.",
+        'string' => "The {field} must be a string.",
+        'integer' => "The {field} must be an integer.",
+        'numeric' => "The {field} must be a number.",
+        'array' => "The {field} must be an array.",
+        'boolean' => "The {field} must be a boolean.",
+        'url' => "The {field} must be a valid URL.",
+        'ip' => "The {field} must be a valid IP address.",
+        'date' => "The {field} must be a valid date.",
+        'regex' => "The {field} format is invalid.",
+        'confirmed' => "The {field} confirmation does not match.",
+        'same' => "The {field} must match {param}.",
+        'different' => "The {field} must differ from {param}.",
+        'in' => "The selected {field} is invalid.",
+        'not_in' => "The selected {field} is invalid.",
+        'alpha' => "The {field} may only contain letters.",
+        'alpha_num' => "The {field} may only contain letters and numbers.",
+        'alpha_dash' => "The {field} may only contain letters, numbers, dashes and underscores.",
+        'phone' => "The {field} must be a valid phone number.",
+        'starts_with' => "The {field} must start with {param}.",
+        'ends_with' => "The {field} must end with {param}.",
+        'uuid' => "The {field} must be a valid UUID.",
+        'json' => "The {field} must be a valid JSON string.",
+        'distinct' => "The {field} has a duplicate value.",
+        'present' => "The {field} must be present.",
+    ];
 
     public function __construct(?SymfonyValidatorInterface $validator = null)
     {
@@ -57,9 +100,14 @@ class Validator implements ValidatorInterface
     {
         $rules = is_string($ruleSet) ? explode('|', $ruleSet) : $ruleSet;
         $value = $this->getValue($field);
-        $isRequired = in_array('required', $rules, true);
+        $isRequired = $rules['required'] ?? in_array('required', $rules, true);
 
-        if (!$isRequired && $this->isEmpty($value) && !in_array('nullable', $rules, true)) {
+        if (is_array($rules) && !isset($rules['required'])) {
+            $rules = array_flip($rules);
+            $isRequired = isset($rules['required']);
+        }
+
+        if (!$isRequired && $this->isEmpty($value) && !isset($rules['nullable'])) {
             return;
         }
 
@@ -68,15 +116,15 @@ class Validator implements ValidatorInterface
             return;
         }
 
-        if ($this->isEmpty($value) && in_array('nullable', $rules, true)) {
+        if ($this->isEmpty($value) && isset($rules['nullable'])) {
             return;
         }
 
-        $inlineRules = ['confirmed', 'same', 'different', 'starts_with', 'ends_with', 'json', 'distinct', 'present'];
         $symfonyRules = [];
 
-        foreach ($rules as $rule) {
+        foreach ($rules as $rule => $_) {
             $params = [];
+
             if (str_contains($rule, ':')) {
                 [$ruleName, $paramStr] = explode(':', $rule, 2);
                 $params = str_contains($paramStr, ',') ? explode(',', $paramStr) : [$paramStr];
@@ -88,7 +136,7 @@ class Validator implements ValidatorInterface
                 continue;
             }
 
-            if (in_array($ruleName, $inlineRules, true)) {
+            if (isset(self::$inlineRulesMap[$ruleName])) {
                 $this->{"rule{$this->studly($ruleName)}"}($field, $value, $params);
             } elseif ($ruleName === 'not_in') {
                 $this->ruleNotIn($field, $value, $params);
@@ -241,40 +289,15 @@ class Validator implements ValidatorInterface
 
     protected function message(string $field, string $rule, string $param = ''): string
     {
-        $messages = [
-            'required' => "The {$field} field is required.",
-            'email' => "The {$field} must be a valid email address.",
-            'min' => "The {$field} must be at least {$param}.",
-            'max' => "The {$field} must not exceed {$param}.",
-            'between' => "The {$field} must be between {$param}.",
-            'string' => "The {$field} must be a string.",
-            'integer' => "The {$field} must be an integer.",
-            'numeric' => "The {$field} must be a number.",
-            'array' => "The {$field} must be an array.",
-            'boolean' => "The {$field} must be a boolean.",
-            'url' => "The {$field} must be a valid URL.",
-            'ip' => "The {$field} must be a valid IP address.",
-            'date' => "The {$field} must be a valid date.",
-            'regex' => "The {$field} format is invalid.",
-            'confirmed' => "The {$field} confirmation does not match.",
-            'same' => "The {$field} must match {$param}.",
-            'different' => "The {$field} must differ from {$param}.",
-            'in' => "The selected {$field} is invalid.",
-            'not_in' => "The selected {$field} is invalid.",
-            'alpha' => "The {$field} may only contain letters.",
-            'alpha_num' => "The {$field} may only contain letters and numbers.",
-            'alpha_dash' => "The {$field} may only contain letters, numbers, dashes and underscores.",
-            'phone' => "The {$field} must be a valid phone number.",
-            'starts_with' => "The {$field} must start with {$param}.",
-            'ends_with' => "The {$field} must end with {$param}.",
-            'uuid' => "The {$field} must be a valid UUID.",
-            'json' => "The {$field} must be a valid JSON string.",
-            'distinct' => "The {$field} has a duplicate value.",
-            'present' => "The {$field} must be present.",
-        ];
-
         $custom = $this->customMessages["{$field}.{$rule}"] ?? $this->customMessages[$rule] ?? null;
-        return $custom ?? $messages[$rule] ?? "The {$field} validation failed.";
+
+        if ($custom !== null) {
+            return str_replace(['{field}', '{param}'], [$field, $param], $custom);
+        }
+
+        $template = self::$messages[$rule] ?? "The {field} validation failed.";
+
+        return str_replace(['{field}', '{param}'], [$field, $param], $template);
     }
 
     protected function getValue(string $field): mixed
