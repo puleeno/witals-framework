@@ -398,6 +398,8 @@ class Application extends Container
         return $this->runtime->isAsync();
     }
 
+    protected ?string $storagePath = null;
+
     /**
      * Get base path
      */
@@ -407,12 +409,30 @@ class Application extends Container
     }
 
     /**
+     * Set the storage directory path.
+     */
+    public function useStoragePath(string $path): self
+    {
+        $this->storagePath = $path;
+        return $this;
+    }
+
+    /**
+     * Get storage path
+     */
+    public function storagePath(string $path = ''): string
+    {
+        $storage = $this->storagePath ?: $this->basePath('storage');
+        return $storage . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
      * Get the destination for PHP error logging.
      * Framework uses this early in the bootstrap process.
      */
     public function getErrorLogPath(): string
     {
-        return $this->basePath('storage/logs/witals.log');
+        return $this->storagePath('logs/witals.log');
     }
 
     /**

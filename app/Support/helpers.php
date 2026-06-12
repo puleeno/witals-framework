@@ -77,7 +77,7 @@ if (!function_exists('storage_path')) {
      */
     function storage_path(string $path = ''): string
     {
-        return app()->basePath('storage/' . $path);
+        return app()->storagePath($path);
     }
 }
 

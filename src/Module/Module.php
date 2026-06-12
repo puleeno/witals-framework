@@ -191,8 +191,6 @@ class Module implements ModuleInterface
 
         $this->booted = true;
 
-        $this->registerAutoload();
-
         $bootstrap = $this->metadata['bootstrap'] ?? null;
 
         if ($bootstrap !== null && is_string($bootstrap) && class_exists($bootstrap)) {
@@ -221,24 +219,5 @@ class Module implements ModuleInterface
     protected function getProviders(): array
     {
         return $this->metadata['providers'] ?? [];
-    }
-
-    protected function registerAutoload(): void
-    {
-        $autoload = $this->metadata['autoload']['psr-4'] ?? [];
-
-        foreach ($autoload as $ns => $dir) {
-            $libPath = $this->path . '/' . ltrim($dir, '/');
-
-            spl_autoload_register(function (string $class) use ($ns, $libPath): void {
-                if (str_starts_with($class, $ns)) {
-                    $relative = substr($class, strlen($ns));
-                    $file = $libPath . str_replace('\\', '/', $relative) . '.php';
-                    if (file_exists($file)) {
-                        require $file;
-                    }
-                }
-            });
-        }
     }
 }

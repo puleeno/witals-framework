@@ -54,6 +54,10 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
         $this->discovered = true;
 
+        if ($this->loadDiscoveryCache()) {
+            return;
+        }
+
         foreach ($this->modulePaths as $modulesPath) {
             if (!is_dir($modulesPath)) {
                 continue;
@@ -93,6 +97,87 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
                 $this->discoverFunctions($name, $metadata);
             }
+        }
+
+        $this->saveDiscoveryCache();
+    }
+
+    protected function discoveryCachePath(): string
+    {
+        return $this->app->basePath('storage/framework/cache/modules-discovery.php');
+    }
+
+    protected function loadDiscoveryCache(): bool
+    {
+        $cacheFile = $this->discoveryCachePath();
+
+        if (!file_exists($cacheFile)) {
+            return false;
+        }
+
+        $cacheMtime = filemtime($cacheFile);
+
+        foreach ($this->modulePaths as $modulesPath) {
+            if (!is_dir($modulesPath)) {
+                continue;
+            }
+
+            $dirMtime = filemtime($modulesPath);
+            if ($dirMtime > $cacheMtime) {
+                return false;
+            }
+
+            foreach (scandir($modulesPath) as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+
+                $modulePath = $modulesPath . '/' . $entry;
+                if (!is_dir($modulePath)) {
+                    continue;
+                }
+
+                $manifestPath = $modulePath . '/manifest.json';
+                if (file_exists($manifestPath) && filemtime($manifestPath) > $cacheMtime) {
+                    return false;
+                }
+
+                $manifestPathLegacy = $modulePath . '/module.json';
+                if (file_exists($manifestPathLegacy) && filemtime($manifestPathLegacy) > $cacheMtime) {
+                    return false;
+                }
+            }
+        }
+
+        $cached = require $cacheFile;
+
+        if (!is_array($cached)) {
+            return false;
+        }
+
+        $this->metadataMap = $cached;
+
+        return true;
+    }
+
+    protected function saveDiscoveryCache(): void
+    {
+        $cacheDir = dirname($this->discoveryCachePath());
+
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0775, true);
+        }
+
+        $content = '<?php return ' . var_export($this->metadataMap, true) . ';' . "\n";
+        file_put_contents($this->discoveryCachePath(), $content, LOCK_EX);
+    }
+
+    public function clearDiscoveryCache(): void
+    {
+        $cacheFile = $this->discoveryCachePath();
+
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
         }
     }
 
@@ -193,7 +278,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 $fullPath = $routePrefix . '/' . ltrim($path, '/');
                 $pattern = $this->pathToRegex($fullPath);
 
-                $index[] = [
+                $index[$method][] = [
                     'method' => $method,
                     'pattern' => $pattern,
                     'module' => $moduleName,
@@ -203,7 +288,11 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             }
         }
 
-        usort($index, fn ($a, $b) => strlen($b['pattern']) <=> strlen($a['pattern']));
+        // Sort each method group by pattern length (longest first = most specific)
+        foreach ($index as $method => &$entries) {
+            usort($entries, fn ($a, $b) => strlen($b['pattern']) <=> strlen($a['pattern']));
+        }
+        unset($entries);
 
         $this->routeIndex = $index;
 
@@ -213,12 +302,11 @@ class ModuleManager implements Contracts\ModuleManagerInterface
     public function matchRoute(string $method, string $path): ?string
     {
         $index = $this->buildRouteIndex();
+        $method = strtoupper($method);
 
-        foreach ($index as $entry) {
-            if ($entry['method'] !== $method) {
-                continue;
-            }
+        $entries = $index[$method] ?? [];
 
+        foreach ($entries as $entry) {
             if (preg_match($entry['pattern'], $path)) {
                 return $entry['module'];
             }
@@ -229,16 +317,13 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
     public function dispatch(Request $request): ?Response
     {
-        $method = $request->method();
+        $method = strtoupper($request->method());
         $path = '/' . ltrim($request->path(), '/');
 
         $index = $this->buildRouteIndex();
+        $entries = $index[$method] ?? [];
 
-        foreach ($index as $entry) {
-            if ($entry['method'] !== $method) {
-                continue;
-            }
-
+        foreach ($entries as $entry) {
             if (!preg_match($entry['pattern'], $path, $matches)) {
                 continue;
             }
@@ -327,8 +412,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             $meta = $this->metadataMap[$name];
             $path = $meta['_path'];
 
-            $manifest = new ModuleManifest($path);
-            $entryClass = $manifest->entryClass();
+            $entryClass = $this->entryClassFromMeta($meta);
 
             if ($entryClass !== null && class_exists($entryClass)) {
                 $instance = new $entryClass($this->app, $path, $meta);
@@ -346,7 +430,6 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             $this->validateVersionConstraints($name, $meta);
             $instance->boot();
 
-            $entryClass = $manifest->entryClass();
             if ($entryClass !== null && !$this->app->has($entryClass)) {
                 $this->app->instance($entryClass, $instance);
             }
@@ -362,6 +445,18 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             error_log("Failed to load module {$name}: {$e->getMessage()}");
             return null;
         }
+    }
+
+    protected function entryClassFromMeta(array $meta): ?string
+    {
+        $ns = $meta['namespace'] ?? '';
+        $entry = $meta['entry'] ?? '';
+
+        if ($ns === '' || $entry === '') {
+            return null;
+        }
+
+        return $ns . '\\' . pathinfo($entry, PATHINFO_FILENAME);
     }
 
     public function loadSupportModules(): void
@@ -386,6 +481,53 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
             $this->load($name);
         }
+
+        $this->registerModuleAutoloaders();
+    }
+
+    protected static ?array $moduleAutoloadMap = null;
+
+    protected static bool $autoloadersRegistered = false;
+
+    protected function registerModuleAutoloaders(): void
+    {
+        if (self::$autoloadersRegistered) {
+            return;
+        }
+
+        self::$autoloadersRegistered = true;
+
+        $prefixes = [];
+
+        foreach ($this->metadataMap as $meta) {
+            $autoload = $meta['autoload']['psr-4'] ?? [];
+            $basePath = $meta['_path'] ?? '';
+
+            foreach ($autoload as $ns => $dir) {
+                $ns = rtrim($ns, '\\') . '\\';
+                $fullPath = $basePath . '/' . ltrim($dir, '/');
+                $prefixes[$ns] = $fullPath;
+            }
+        }
+
+        if ($prefixes === []) {
+            return;
+        }
+
+        self::$moduleAutoloadMap = $prefixes;
+
+        spl_autoload_register(function (string $class): void {
+            foreach (self::$moduleAutoloadMap as $ns => $baseDir) {
+                if (str_starts_with($class, $ns)) {
+                    $relative = substr($class, strlen($ns));
+                    $file = $baseDir . str_replace('\\', '/', $relative) . '.php';
+                    if (file_exists($file)) {
+                        require $file;
+                        return;
+                    }
+                }
+            }
+        });
     }
 
     public function loadFunction(string $fullName): ?ModuleInterface
