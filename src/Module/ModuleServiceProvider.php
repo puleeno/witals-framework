@@ -24,20 +24,39 @@ class ModuleServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Snapshot providers before module loading
-        // (modules register their providers during loadModule()->register(),
-        //  but $this->app->booted is still false during bootProviders(),
-        //  so we must explicitly boot them after loading.)
+        // ─────────────────────────────────────────────────────────────
+        // Module Lifecycle — boot order matters here:
+        //
+        //   1. Snapshot currently-loaded provider keys BEFORE loading
+        //      modules. This captures only framework-registered providers.
+        //
+        //   2. Load all support modules via ModuleManager. Each module's
+        //      register() method runs during this call, which may register
+        //      new service providers into $this->app->providers[].
+        //
+        //   3. Call bootNewProviders() to boot ONLY the providers that
+        //      were registered by modules (step 2). We pass the snapshot
+        //      from step 1 as the "already booted" baseline so those
+        //      providers are skipped.
+        //
+        // Why not let the normal provider boot cycle handle this?
+        //   - Provider booting normally happens *before* module loading
+        //     via bootProviders(). By the time modules load, the app's
+        //     $booted flag is set and bootProviders() won't run again.
+        //   - So we manually call bootNewProviders() after module loading
+        //     to ensure module-registered providers get their boot() called.
+        //
+        // If you add a new lifecycle phase (e.g., deferred providers,
+        // eager-loaded modules), update this method accordingly.
+        // ─────────────────────────────────────────────────────────────
+
         $previousProviders = $this->app->getLoadedProvidersKeys();
 
-        // Load all support modules at boot (no routes, just services)
         $manager = $this->app->make(ModuleManager::class);
         $manager->loadSupportModules();
 
-        // Boot any service providers that were registered by modules
         $this->app->bootNewProviders($previousProviders);
 
-        // Register console commands
         $kernel = $this->app->make(\Witals\Framework\Console\Kernel::class);
 
         $kernel->register(\Witals\Framework\Module\Console\ModuleListCommand::class);
