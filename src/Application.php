@@ -451,6 +451,11 @@ class Application extends Container
         $this->register(\Witals\Framework\Queue\QueueServiceProvider::class);
         $this->register(\Witals\Framework\Module\ModuleServiceProvider::class);
         $this->register(\Witals\Framework\Events\EventServiceProvider::class);
+
+        // Foundation providers
+        $this->register(\Witals\Framework\Serializer\SerializerServiceProvider::class);
+        $this->register(\Witals\Framework\Validator\ValidationServiceProvider::class);
+        $this->register(\Witals\Framework\Form\FormServiceProvider::class);
     }
 
     /**
