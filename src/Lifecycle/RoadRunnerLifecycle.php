@@ -6,6 +6,7 @@ namespace Witals\Framework\Lifecycle;
 
 use Witals\Framework\Contracts\LifecycleManager;
 use Psr\Log\LoggerInterface;
+use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Application;
 use Witals\Framework\Contracts\ResettableInterface;

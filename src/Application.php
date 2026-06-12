@@ -19,6 +19,8 @@ use Witals\Framework\Exceptions\Handler as ExceptionHandler;
 use Witals\Framework\Bootstrap\HandleExceptions;
 use Witals\Framework\Contracts\I18n\Translator as TranslatorFactory;
 use Witals\Framework\I18n\Translator;
+use Psr\Log\LoggerInterface;
+use Witals\Framework\Log\Drivers\StandardLogger;
 use Throwable;
 
 /**
@@ -87,6 +89,8 @@ class Application extends Container
                 enabled: $app->getRuntime()->isLongRunning(),
             );
         });
+
+        $this->initializeLogger();
 
         $this->registerConfiguredProviders();
     }
@@ -250,6 +254,24 @@ class Application extends Container
         }
 
         return $this->view;
+    }
+
+    /**
+     * Initialize logger manager
+     */
+    protected function initializeLogger(): void
+    {
+        $this->singleton(LoggerInterface::class, function ($app) {
+            // Default to standard buffered logger
+            return new StandardLogger(
+                path: $app->basePath('storage/logs/witals.log'),
+                buffered: true,
+                minLevel: getenv('APP_DEBUG') ? 'debug' : 'info'
+            );
+        });
+
+        $this->alias(LoggerInterface::class, 'log');
+        $this->alias(LoggerInterface::class, StandardLogger::class);
     }
 
     /**
