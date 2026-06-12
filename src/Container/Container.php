@@ -158,6 +158,7 @@ class Container implements ContainerContract
 
     public function call(callable $callback, array $parameters = [])
     {
+        $reflection = $this->getCallReflection($callback);
         $dependencies = $reflection->getParameters();
         $instances = $this->resolveDependencies($dependencies, $parameters);
 
