@@ -17,12 +17,24 @@ class Module implements ModuleInterface
 
     protected array $flattenedFunctions = [];
 
+    protected ?ModuleManifest $manifest = null;
+
     public function __construct(
         protected Application $app,
         protected string $path,
         protected array $metadata = [],
     ) {
+        if (empty($metadata) && ModuleManifest::exists($path)) {
+            $this->manifest = new ModuleManifest($path);
+            $this->metadata = $this->manifest->toArray();
+        }
+
         $this->buildFunctionTree();
+    }
+
+    public function manifest(): ?ModuleManifest
+    {
+        return $this->manifest;
     }
 
     protected function buildFunctionTree(): void
@@ -74,12 +86,14 @@ class Module implements ModuleInterface
 
     public function getPriority(): int
     {
-        return $this->metadata['priority'] ?? 50;
+        return (int) ($this->metadata['priority'] ?? 50);
     }
 
     public function getDependencies(): array
     {
-        return $this->metadata['depends'] ?? [];
+        $deps = $this->metadata['dependencies'] ?? [];
+
+        return is_array($deps) ? array_keys($deps) : $deps;
     }
 
     public function getProvides(): array

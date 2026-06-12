@@ -21,6 +21,8 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
     protected bool $discovered = false;
 
+    protected array $modulePaths = [];
+
     public function __construct(
         protected Application $app,
         protected string $modulesPath = '',
@@ -28,6 +30,17 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         if ($modulesPath === '') {
             $this->modulesPath = $app->basePath('modules');
         }
+
+        $this->modulePaths = [
+            $this->modulesPath,
+            $app->basePath('framework/witals/modules'),
+            $app->basePath('framework/presto/modules'),
+        ];
+    }
+
+    public function addModulePath(string $path): void
+    {
+        $this->modulePaths[] = $path;
     }
 
     public function discover(): void
@@ -38,42 +51,45 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
         $this->discovered = true;
 
-        if (!is_dir($this->modulesPath)) {
-            return;
-        }
-
-        foreach (scandir($this->modulesPath) as $entry) {
-            if ($entry === '.' || $entry === '..') {
+        foreach ($this->modulePaths as $modulesPath) {
+            if (!is_dir($modulesPath)) {
                 continue;
             }
 
-            $modulePath = $this->modulesPath . '/' . $entry;
-            $metaFile = $modulePath . '/module.json';
+            foreach (scandir($modulesPath) as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
 
-            if (!is_file($metaFile)) {
-                continue;
+                $modulePath = $modulesPath . '/' . $entry;
+
+                if (!is_dir($modulePath)) {
+                    continue;
+                }
+
+                $manifest = new ModuleManifest($modulePath);
+
+                if (!$manifest->valid()) {
+                    continue;
+                }
+
+                $name = $manifest->name();
+
+                if (isset($this->metadataMap[$name])) {
+                    continue;
+                }
+
+                $metadata = $manifest->toArray();
+
+                $configKey = "modules.enabled.{$name}";
+                if ($this->app->config($configKey) !== null) {
+                    $metadata['enabled'] = (bool) $this->app->config($configKey);
+                }
+
+                $this->metadataMap[$name] = $metadata;
+
+                $this->discoverFunctions($name, $metadata);
             }
-
-            $raw = file_get_contents($metaFile);
-            $metadata = json_decode($raw, true);
-
-            if ($metadata === null || !isset($metadata['name'])) {
-                continue;
-            }
-
-            $name = $metadata['name'];
-
-            $configKey = "modules.enabled.{$name}";
-            if ($this->app->config($configKey) !== null) {
-                $metadata['enabled'] = (bool) $this->app->config($configKey);
-            }
-
-            $metadata['_type'] = $metadata['type'] ?? 'support';
-            $metadata['_path'] = $modulePath;
-
-            $this->metadataMap[$name] = $metadata;
-
-            $this->discoverFunctions($name, $metadata);
         }
     }
 
@@ -297,15 +313,35 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         }
 
         $meta = $this->metadataMap[$name];
+        $path = $meta['_path'];
 
-        $instance = new Module($this->app, $meta['_path'], $meta);
+        // Try to instantiate the proper entry class from manifest
+        $manifest = new ModuleManifest($path);
+        $entryClass = $manifest->entryClass();
+
+        if ($entryClass !== null && class_exists($entryClass)) {
+            $instance = new $entryClass($this->app, $path, $meta);
+        } else {
+            $instance = new Module($this->app, $path, $meta);
+        }
+
+        if (!$instance instanceof Module) {
+            return null;
+        }
 
         try {
             $instance->register();
             $this->loadDependencies($instance);
             $instance->boot();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            error_log("Failed to load module {$name}: {$e->getMessage()}");
             return null;
+        }
+
+        // Bind the entry class to container for direct resolution
+        $entryClass = $manifest->entryClass();
+        if ($entryClass !== null && !$this->app->has($entryClass)) {
+            $this->app->instance($entryClass, $instance);
         }
 
         $this->instances[$name] = $instance;
