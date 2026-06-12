@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Witals\Framework\View\Engines;
 
 use Witals\Framework\Contracts\View\Engine;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Spiral\Stempler\Builder;
 use Spiral\Stempler\Parser;
 use Spiral\Stempler\Lexer;
@@ -17,12 +19,18 @@ class StemplerEngine implements Engine
     protected array $extensions;
     protected array $paths;
     protected string $cachePath;
+    protected LoggerInterface $logger;
 
-    public function __construct(string $cachePath, array $paths = [], array $extensions = ['.stempler.php', '.dark.php'])
-    {
+    public function __construct(
+        string $cachePath,
+        array $paths = [],
+        array $extensions = ['.stempler.php', '.dark.php'],
+        ?LoggerInterface $logger = null,
+    ) {
         $this->cachePath = $cachePath;
         $this->paths = array_filter(array_map(fn($p) => realpath($p) ?: $p, $paths));
         $this->extensions = $extensions;
+        $this->logger = $logger ?? new NullLogger();
         $this->initializeBuilder();
     }
 
@@ -61,8 +69,12 @@ class StemplerEngine implements Engine
         $parser->addSyntax(new Lexer\Grammar\InlineGrammar(), new Parser\Syntax\InlineSyntax());
 
         // 2. Setup Multi-Path Loader (Aggregate)
-        $loader = new class($this->paths, $this->extensions) implements \Spiral\Stempler\Loader\LoaderInterface {
-            public function __construct(private array $paths, private array $extensions) {}
+        $loader = new class($this->paths, $this->extensions, $this->logger) implements \Spiral\Stempler\Loader\LoaderInterface {
+            public function __construct(
+                private array $paths,
+                private array $extensions,
+                private LoggerInterface $logger,
+            ) {}
             
             public function has(string $name): bool {
                 // Normalize: forward slashes and dots both become DIRECTORY_SEPARATOR
@@ -101,7 +113,11 @@ class StemplerEngine implements Engine
                 }
 
                 $pathsList = implode('; ', $this->paths);
-                error_log("Stempler LOAD FAILED for '{$name}' (normalized='{$normalized}'). Paths: [{$pathsList}]");
+                $this->logger->error("Stempler LOAD FAILED for '{name}' (normalized='{normalized}'). Paths: [{paths}]", [
+                    'name' => $name,
+                    'normalized' => $normalized,
+                    'paths' => $pathsList,
+                ]);
                 throw new \Spiral\Stempler\Exception\LoaderException("Unable to load template \"{$name}\" in any search path.");
             }
         };

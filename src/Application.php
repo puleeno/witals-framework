@@ -584,7 +584,13 @@ class Application extends Container
             }
 
             $this->flushLogs();
-            gc_collect_cycles();
+
+            // Only run GC when memory usage exceeds 80% of limit
+            // to avoid unnecessary overhead on every request
+            $memLimit = $this->getMemoryLimitBytes();
+            if ($memLimit > 0 && memory_get_usage() > $memLimit * 0.8) {
+                gc_collect_cycles();
+            }
         }
     }
 
@@ -611,6 +617,28 @@ class Application extends Container
                 $logger->flush();
             }
         }
+    }
+
+    /**
+     * Get memory limit in bytes, or 0 if unlimited.
+     */
+    protected function getMemoryLimitBytes(): int
+    {
+        $val = strtolower(ini_get('memory_limit'));
+
+        if ($val === '' || $val === '-1') {
+            return 0;
+        }
+
+        $unit = $val[-1];
+        $num = (int) $val;
+
+        return match ($unit) {
+            'g' => $num * 1024 * 1024 * 1024,
+            'm' => $num * 1024 * 1024,
+            'k' => $num * 1024,
+            default => $num,
+        };
     }
 
     /**

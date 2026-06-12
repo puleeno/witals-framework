@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Foundation\Module;
 
 use App\Foundation\Application;
+use Psr\Log\LoggerInterface;
 
 /**
  * Module Manager
@@ -136,7 +137,10 @@ class ModuleManager
                 // Visit each dependency first
                 foreach ($module->getDependencies() as $depName) {
                     if (!isset($modules[$depName])) {
-                        error_log("ModuleManager: Module '{$name}' depends on '{$depName}' which is not installed.");
+                        $this->app->make(LoggerInterface::class)->warning(
+                            "ModuleManager: Module '{module}' depends on '{dependency}' which is not installed.",
+                            ['module' => $name, 'dependency' => $depName]
+                        );
                         continue;
                     }
                     $visit($depName);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Foundation;
 
+use Psr\Log\LoggerInterface;
 use Witals\Framework\Application as BaseApplication;
 use App\Foundation\Config\ConfigRepository;
 use App\Foundation\Module\ModuleManager;
@@ -48,11 +49,10 @@ class Application extends BaseApplication
             try {
                 $provider = new $provider($this);
             } catch (\Throwable $e) {
-                error_log(sprintf(
-                    '[App] Failed to instantiate provider %s: %s',
-                    is_string($provider) ? $provider : get_class($provider),
-                    $e->getMessage()
-                ));
+                $this->logError(
+                    '[App] Failed to instantiate provider {provider}: {message}',
+                    ['provider' => is_string($provider) ? $provider : get_class($provider), 'message' => $e->getMessage()]
+                );
                 return null;
             }
         }
@@ -69,11 +69,10 @@ class Application extends BaseApplication
             try {
                 $provider->register();
             } catch (\Throwable $e) {
-                error_log(sprintf(
-                    '[App] Failed to register provider %s: %s',
-                    $providerClass,
-                    $e->getMessage()
-                ));
+                $this->logError(
+                    '[App] Failed to register provider {provider}: {message}',
+                    ['provider' => $providerClass, 'message' => $e->getMessage()]
+                );
                 return null;
             }
         }
@@ -85,11 +84,10 @@ class Application extends BaseApplication
             try {
                 $provider->boot();
             } catch (\Throwable $e) {
-                error_log(sprintf(
-                    '[App] Failed to boot provider %s: %s',
-                    $providerClass,
-                    $e->getMessage()
-                ));
+                $this->logError(
+                    '[App] Failed to boot provider {provider}: {message}',
+                    ['provider' => $providerClass, 'message' => $e->getMessage()]
+                );
             }
         }
 
@@ -116,11 +114,10 @@ class Application extends BaseApplication
                 try {
                     $provider->boot();
                 } catch (\Throwable $e) {
-                    error_log(sprintf(
-                        '[App] Failed to boot provider %s: %s',
-                        $class,
-                        $e->getMessage()
-                    ));
+                    $this->logError(
+                        '[App] Failed to boot provider {provider}: {message}',
+                        ['provider' => $class, 'message' => $e->getMessage()]
+                    );
                 }
                 $this->bootedProviders[$class] = true;
             }
@@ -303,5 +300,21 @@ class Application extends BaseApplication
     public function extend(string $abstract, \Closure $closure): void
     {
         parent::extend($abstract, $closure);
+    }
+
+    /**
+     * Log an error via LoggerInterface if available, fall back to error_log.
+     */
+    private function logError(string $message, array $context = []): void
+    {
+        if ($this->has(LoggerInterface::class)) {
+            try {
+                $this->make(LoggerInterface::class)->error($message, $context);
+                return;
+            } catch (\Throwable) {
+                // Fall through to error_log
+            }
+        }
+        error_log('[' . ($context['provider'] ?? 'App') . '] ' . $message);
     }
 }

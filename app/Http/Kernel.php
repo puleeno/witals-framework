@@ -117,7 +117,6 @@ class Kernel implements KernelContract
                 'exception' => $e,
                 'trace' => $e->getTraceAsString(),
             ]);
-            error_log("[Kernel Error] " . $e->getMessage() . "\n" . $e->getTraceAsString());
             return Response::json([
                 'error' => 'Internal Server Error',
                 'message' => $e->getMessage(),
@@ -208,20 +207,10 @@ class Kernel implements KernelContract
                 'name' => 'Witals Framework',
                 'environment' => $this->getEnvironmentName(),
                 'is_roadrunner' => $this->app->isRoadRunner(),
-                'database' => $this->checkDatabase(),
-                'db_user' => env('DB_USERNAME', 'unknown'),
-                'db_prefix' => env('WP_TABLE_PREFIX', 'unknown'),
-                'auth_key_sample' => substr(env('WP_AUTH_KEY', 'none'), 0, 10) . '...',
             ],
             'php' => [
                 'version' => PHP_VERSION,
                 'sapi' => PHP_SAPI,
-                'memory_limit' => ini_get('memory_limit'),
-                'max_execution_time' => ini_get('max_execution_time'),
-            ],
-            'server' => [
-                'software' => $this->getServerInfo(),
-                'protocol' => $_SERVER['SERVER_PROTOCOL'] ?? 'Unknown',
             ],
             'performance' => [
                 'memory_usage' => $this->getMemoryUsage(),

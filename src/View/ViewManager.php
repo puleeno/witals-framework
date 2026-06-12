@@ -8,6 +8,8 @@ use Witals\Framework\Contracts\View\Factory as FactoryContract;
 use Witals\Framework\Contracts\View\View as ViewContract;
 use Witals\Framework\Contracts\View\Engine;
 use Witals\Framework\View\Engines\PhpEngine;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use InvalidArgumentException;
 
 class ViewManager implements FactoryContract
@@ -28,6 +30,11 @@ class ViewManager implements FactoryContract
     protected array $engines = [];
 
     /**
+     * The logger instance.
+     */
+    protected LoggerInterface $logger;
+
+    /**
      * Data that is shared across all views.
      */
     protected array $shared = [];
@@ -39,9 +46,10 @@ class ViewManager implements FactoryContract
         'php' => 'php',
     ];
 
-    public function __construct(array $paths = [])
+    public function __construct(array $paths = [], ?LoggerInterface $logger = null)
     {
         $this->paths = $paths;
+        $this->logger = $logger ?? new NullLogger();
         $this->registerDefaultEngines();
     }
 
@@ -202,7 +210,10 @@ class ViewManager implements FactoryContract
 
         foreach ($extensions as $extension) {
             if (str_ends_with($path, '.' . $extension)) {
-                error_log("View: Choosing engine [$extension] for path [$path]");
+                $this->logger->debug("View: Choosing engine [{extension}] for path [{path}]", [
+                    'extension' => $extension,
+                    'path' => $path,
+                ]);
                 return $this->engines[$extension];
             }
         }

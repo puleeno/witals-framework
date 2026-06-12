@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Support\ServiceProvider;
+use Psr\Log\LoggerInterface;
 use Cycle\Database\Config\DatabaseConfig;
 use Cycle\Database\DatabaseManager;
 use Cycle\Database\DatabaseProviderInterface;
@@ -30,7 +31,8 @@ class DatabaseServiceProvider extends ServiceProvider
         // Register Module Schema Manager (declarative schema.json syncer)
         $this->singleton(\App\Foundation\Database\ModuleSchemaManager::class, function ($app) {
             return new \App\Foundation\Database\ModuleSchemaManager(
-                $app->make(\Cycle\Database\DatabaseProviderInterface::class)
+                $app->make(\Cycle\Database\DatabaseProviderInterface::class),
+                $app->make(\Psr\Log\LoggerInterface::class),
             );
         });
 
@@ -158,17 +160,24 @@ class DatabaseServiceProvider extends ServiceProvider
                     if ($module->isEnabled()) {
                         $synced = $schemaManager->syncModule($module->getPath());
                         if (!empty($synced)) {
-                            error_log(sprintf(
-                                'SchemaManager: [%s] synced tables: %s',
-                                $module->getName(),
-                                implode(', ', $synced)
-                            ));
+                            $app->make(LoggerInterface::class)->info(
+                                'SchemaManager: [{module}] synced tables: {tables}',
+                                [
+                                    'module' => $module->getName(),
+                                    'tables' => implode(', ', $synced),
+                                ]
+                            );
                         }
                     }
                 }
             }
         } catch (\Throwable $e) {
-            error_log('SchemaManager boot error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            $this->app->make(LoggerInterface::class)->error('SchemaManager boot error: {message} in {file}:{line}', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'exception' => $e,
+            ]);
         }
     }
 

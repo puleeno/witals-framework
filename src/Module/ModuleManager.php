@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Witals\Framework\Module;
 
 use Witals\Framework\Application;
+use Psr\Log\LoggerInterface;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Module\Contracts\ModuleInterface;
@@ -440,7 +441,10 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             return $instance;
         } catch (\Throwable $e) {
             unset($this->loading[$name]);
-            error_log("Failed to load module {$name}: {$e->getMessage()}");
+            $this->app->make(LoggerInterface::class)->error(
+                'Failed to load module {name}: {message}',
+                ['name' => $name, 'message' => $e->getMessage(), 'exception' => $e]
+            );
             return null;
         }
     }

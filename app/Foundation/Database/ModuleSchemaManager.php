@@ -7,6 +7,7 @@ namespace App\Foundation\Database;
 use Cycle\Database\DatabaseProviderInterface;
 use Cycle\Database\Schema\AbstractTable;
 use Cycle\Database\Schema\AbstractColumn;
+use Psr\Log\LoggerInterface;
 
 /**
  * Module Schema Manager
@@ -89,7 +90,8 @@ class ModuleSchemaManager
     private bool $forceSync;
 
     public function __construct(
-        private readonly DatabaseProviderInterface $dbal
+        private readonly DatabaseProviderInterface $dbal,
+        private readonly LoggerInterface $logger,
     ) {
         $this->forceSync = $this->shouldForceSync();
     }
@@ -122,7 +124,10 @@ class ModuleSchemaManager
         $schema = json_decode($raw, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log("ModuleSchemaManager: Invalid JSON in {$schemaFile}: " . json_last_error_msg());
+            $this->logger->error(
+                'ModuleSchemaManager: Invalid JSON in {file}: {error}',
+                ['file' => $schemaFile, 'error' => json_last_error_msg()]
+            );
             return [];
         }
 
@@ -147,7 +152,10 @@ class ModuleSchemaManager
                 $this->syncTable($tableDef);
                 $processed[] = $tableDef['name'];
             } catch (\Throwable $e) {
-                error_log("ModuleSchemaManager: Failed to sync table '{$tableDef['name']}': " . $e->getMessage());
+                $this->logger->error(
+                    "ModuleSchemaManager: Failed to sync table '{table}': {message}",
+                    ['table' => $tableDef['name'], 'message' => $e->getMessage(), 'exception' => $e]
+                );
             }
         }
 
@@ -207,9 +215,12 @@ class ModuleSchemaManager
             $table->index(['module'])->unique()->setName('uq_schema_module');
             $table->save();
 
-            error_log('ModuleSchemaManager: Created schema registry table.');
+            $this->logger->info('ModuleSchemaManager: Created schema registry table.');
         } catch (\Throwable $e) {
-            error_log('ModuleSchemaManager: Could not ensure registry table: ' . $e->getMessage());
+            $this->logger->error('ModuleSchemaManager: Could not ensure registry table: {message}', [
+                'message' => $e->getMessage(),
+                'exception' => $e,
+            ]);
         }
     }
 
@@ -288,7 +299,10 @@ class ModuleSchemaManager
                 ];
             }
         } catch (\Throwable $e) {
-            error_log('ModuleSchemaManager: Failed to update registry: ' . $e->getMessage());
+            $this->logger->error('ModuleSchemaManager: Failed to update registry: {message}', [
+                'message' => $e->getMessage(),
+                'exception' => $e,
+            ]);
         }
     }
 
@@ -471,7 +485,16 @@ class ModuleSchemaManager
                     ->onDelete($onDelete)
                     ->onUpdate($onUpdate);
             } catch (\Throwable $e) {
-                error_log("ModuleSchemaManager: FK {$column}->{$references}.{$on} skipped: " . $e->getMessage());
+                $this->logger->warning(
+                    'ModuleSchemaManager: FK {column}->{references}.{on} skipped: {message}',
+                    [
+                        'column' => $column,
+                        'references' => $references,
+                        'on' => $on,
+                        'message' => $e->getMessage(),
+                        'exception' => $e,
+                    ]
+                );
             }
         }
     }
@@ -549,7 +572,10 @@ class ModuleSchemaManager
                 unset($this->registryCache[$moduleName]);
             }
         } catch (\Throwable $e) {
-            error_log('ModuleSchemaManager: invalidate failed: ' . $e->getMessage());
+            $this->logger->error('ModuleSchemaManager: invalidate failed: {message}', [
+                'message' => $e->getMessage(),
+                'exception' => $e,
+            ]);
         }
     }
 }

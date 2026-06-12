@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Witals\Framework\Lifecycle;
 
 use Witals\Framework\Contracts\LifecycleManager;
+use Psr\Log\LoggerInterface;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Application;
 use Witals\Framework\Contracts\ResettableInterface;
@@ -183,11 +184,13 @@ class RoadRunnerLifecycle implements LifecycleManager
 
         if ($currentMemory > $this->maxMemoryBeforeRestart) {
             // Log warning about high memory usage
-            error_log(sprintf(
-                '[RoadRunner Worker] High memory usage: %s (limit: %s)',
-                $this->formatBytes($currentMemory),
-                $this->formatBytes($this->maxMemoryBeforeRestart)
-            ));
+            $this->app->make(LoggerInterface::class)->warning(
+                '[RoadRunner Worker] High memory usage: {current} (limit: {limit})',
+                [
+                    'current' => $this->formatBytes($currentMemory),
+                    'limit' => $this->formatBytes($this->maxMemoryBeforeRestart),
+                ]
+            );
 
             // RoadRunner will restart worker based on max_jobs or memory limits
         }
@@ -255,10 +258,10 @@ class RoadRunnerLifecycle implements LifecycleManager
     protected function logWorkerStats(): void
     {
         $stats = $this->getWorkerStats();
-        error_log(sprintf(
-            '[RoadRunner Worker] Shutting down. Stats: %s',
-            json_encode($stats)
-        ));
+        $this->app->make(LoggerInterface::class)->info(
+            '[RoadRunner Worker] Shutting down. Stats: {stats}',
+            ['stats' => json_encode($stats)]
+        );
     }
 
     /**

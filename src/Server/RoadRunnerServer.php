@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Witals\Framework\Server;
 
 use Witals\Framework\Application;
+use Psr\Log\LoggerInterface;
 use Witals\Framework\Contracts\Server;
 use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\Http\Request;
@@ -79,13 +80,16 @@ class RoadRunnerServer implements Server
      */
     protected function handleError(\Throwable $e, PSR7Worker $psr7Worker, Psr17Factory $factory): void
     {
-        error_log(sprintf(
-            "[RoadRunner Error] %s in %s:%d\n%s",
-            $e->getMessage(),
-            $e->getFile(),
-            $e->getLine(),
-            $e->getTraceAsString()
-        ));
+        $this->app->make(LoggerInterface::class)->error(
+            '[RoadRunner Error] {message} in {file}:{line}',
+            [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'exception' => $e,
+            ]
+        );
 
         try {
             $errorResponse = $factory->createResponse(500)

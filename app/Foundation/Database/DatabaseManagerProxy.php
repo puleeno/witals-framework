@@ -7,6 +7,7 @@ namespace App\Foundation\Database;
 use Cycle\Database\DatabaseInterface;
 use Cycle\Database\DatabaseManager;
 use Cycle\Database\DatabaseProviderInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * Database Manager Proxy
@@ -18,8 +19,11 @@ class DatabaseManagerProxy implements DatabaseProviderInterface
     protected array $initializedDatabases = [];
     protected string $defaultDriver;
 
-    public function __construct(DatabaseManager $manager, string $defaultDriver = 'mysql')
-    {
+    public function __construct(
+        DatabaseManager $manager,
+        string $defaultDriver = 'mysql',
+        private readonly ?LoggerInterface $logger = null,
+    ) {
         $this->manager = $manager;
         $this->defaultDriver = $defaultDriver;
     }
@@ -54,8 +58,12 @@ class DatabaseManagerProxy implements DatabaseProviderInterface
                 $db->execute("SET sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_TRANS_TABLES',''))");
                 $db->execute("SET sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_ALL_TABLES',''))");
             } catch (\Throwable $e) {
-                // Log but don't fail if SQL mode configuration fails
-                error_log("Failed to configure SQL mode: " . $e->getMessage());
+                if ($this->logger) {
+                    $this->logger->warning('Failed to configure SQL mode: {message}', [
+                        'message' => $e->getMessage(),
+                        'exception' => $e,
+                    ]);
+                }
             }
         }
     }
@@ -83,8 +91,12 @@ class DatabaseManagerProxy implements DatabaseProviderInterface
             // Reset initialization tracking
             $this->initializedDatabases = [];
         } catch (\Throwable $e) {
-            // Log but don't fail
-            error_log("Failed to disconnect database: " . $e->getMessage());
+            if ($this->logger) {
+                $this->logger->warning('Failed to disconnect database: {message}', [
+                    'message' => $e->getMessage(),
+                    'exception' => $e,
+                ]);
+            }
         }
     }
 

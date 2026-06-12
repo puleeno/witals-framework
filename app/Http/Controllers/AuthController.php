@@ -8,6 +8,7 @@ use Witals\Framework\Application;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Cake\Chronos\Chronos;
+use Psr\Log\LoggerInterface;
 use Witals\Framework\Contracts\Auth\AuthContextInterface;
 use Witals\Framework\Contracts\Auth\TokenStorageInterface;
 use Witals\Framework\Contracts\Auth\HttpTransportInterface;
@@ -453,7 +454,10 @@ class AuthController
                 }
             }
         } catch (\Throwable $e) {
-            error_log("Auth error: " . $e->getMessage());
+            $this->app->make(LoggerInterface::class)->error('Auth error: {message}', [
+                'message' => $e->getMessage(),
+                'exception' => $e,
+            ]);
         }
 
         return null;
