@@ -122,7 +122,7 @@ class Container implements ContainerContract
     /**
      * Resolve the given type from the container.
      */
-    public function make(string $abstract, array $parameters = [])
+    public function make(string $abstract, array $parameters = []): mixed
     {
         return $this->resolve($abstract, $parameters);
     }
@@ -156,7 +156,7 @@ class Container implements ContainerContract
         return $object;
     }
 
-    public function call(callable $callback, array $parameters = [])
+    public function call(callable $callback, array $parameters = []): mixed
     {
         $reflection = $this->getCallReflection($callback);
         $dependencies = $reflection->getParameters();
@@ -170,19 +170,42 @@ class Container implements ContainerContract
      */
     protected function getCallReflection(callable $callback): \ReflectionFunctionAbstract
     {
-        if ($callback instanceof Closure) {
-            return new \ReflectionFunction($callback);
+        $cacheKey = $this->getCallableCacheKey($callback);
+
+        if ($cacheKey !== null && isset(self::$reflectionCache[$cacheKey])) {
+            return self::$reflectionCache[$cacheKey];
+        }
+
+        $reflection = match (true) {
+            $callback instanceof \Closure => new \ReflectionFunction($callback),
+            is_array($callback) => new \ReflectionMethod($callback[0], $callback[1]),
+            is_string($callback) && str_contains($callback, '::') => new \ReflectionMethod(...explode('::', $callback)),
+            default => new \ReflectionMethod($callback, '__invoke'),
+        };
+
+        if ($cacheKey !== null) {
+            self::$reflectionCache[$cacheKey] = $reflection;
+        }
+
+        return $reflection;
+    }
+
+    private function getCallableCacheKey(callable $callback): ?string
+    {
+        if ($callback instanceof \Closure) {
+            return null; // Closures are unique per instance — can't cache
         }
 
         if (is_array($callback)) {
-            return new \ReflectionMethod($callback[0], $callback[1]);
+            $class = is_string($callback[0]) ? $callback[0] : get_class($callback[0]);
+            return $class . '@' . $callback[1];
         }
 
-        if (is_string($callback) && strpos($callback, '::') !== false) {
-            return new \ReflectionMethod(...explode('::', $callback));
+        if (is_string($callback)) {
+            return $callback;
         }
 
-        return new \ReflectionMethod($callback, '__invoke');
+        return null;
     }
 
     /**
@@ -329,6 +352,7 @@ class Container implements ContainerContract
     {
         $this->bindings = [];
         $this->instances = [];
+        self::$reflectionCache = [];
     }
 
     /**
@@ -344,7 +368,7 @@ class Container implements ContainerContract
      * @param callable $callback
      * @return mixed
      */
-    public function runScope(array $bindings, callable $callback)
+    public function runScope(array $bindings, callable $callback): mixed
     {
         // 1. Snapshot valid instances to detect new ones (for cleanup)
         $instanceSnapshot = $this->instances;

@@ -12,6 +12,8 @@ use Psr\Log\LoggerInterface;
 use Witals\Framework\Contracts\Auth\AuthContextInterface;
 use Witals\Framework\Contracts\Auth\TokenStorageInterface;
 use Witals\Framework\Contracts\Auth\HttpTransportInterface;
+use Witals\Framework\Contracts\Auth\RateLimiterInterface;
+use Witals\Framework\Contracts\Session\SessionInterface;
 
 class AuthController
 {
@@ -308,6 +310,16 @@ class AuthController
         $redirect = $this->safeRedirect($request->post('redirect', '/dashboard'));
         $remember = (bool) $request->post('remember', false);
 
+        $rateLimiter = $this->app->make(RateLimiterInterface::class);
+        $rateLimitKey = 'login:' . strtolower($email);
+
+        if (!$rateLimiter->attempt($rateLimitKey)) {
+            $availableIn = $rateLimiter->availableIn($rateLimitKey);
+            return Response::html('', 302, [
+                'Location' => '/login?error=' . urlencode("Quá nhiều lần thử. Vui lòng thử lại sau {$availableIn} giây.") . '&redirect=' . urlencode($redirect)
+            ]);
+        }
+
         if (empty($email) || empty($password)) {
             return Response::html('', 302, [
                 'Location' => '/login?error=' . urlencode('Vui lòng nhập email và mật khẩu') . '&redirect=' . urlencode($redirect)
@@ -411,8 +423,9 @@ class AuthController
                     // For now, if we can't verify PHPass easily without the library, 
                     // we'll assume the user might need to reset or we use a helper if available.
                 } elseif (strlen($hash) === 32) {
-                    // Legacy MD5
-                    $isValid = (md5($password) === $hash);
+                    // Legacy MD5 — not secure. Prompt password reset instead.
+                    // Instead of silently verifying with MD5, redirect to password reset.
+                    throw new \RuntimeException('Mật khẩu của bạn sử dụng thuật toán cũ không còn an toàn. Vui lòng đặt lại mật khẩu.');
                 } else {
                     $isValid = password_verify($password, $hash);
                 }
@@ -474,11 +487,12 @@ class AuthController
 
     private function csrfToken(): string
     {
-        $token = $_SESSION['_csrf_token'] ?? '';
+        $session = $this->app->make(SessionInterface::class);
+        $token = $session->get('_csrf_token', '');
 
         if ($token === '') {
             $token = bin2hex(random_bytes(32));
-            $_SESSION['_csrf_token'] = $token;
+            $session->set('_csrf_token', $token);
         }
 
         return $token;
@@ -486,7 +500,8 @@ class AuthController
 
     private function validateCsrf(string $token): bool
     {
-        $expected = $_SESSION['_csrf_token'] ?? '';
+        $session = $this->app->make(SessionInterface::class);
+        $expected = $session->get('_csrf_token', '');
 
         if ($expected === '' || $token === '') {
             return false;

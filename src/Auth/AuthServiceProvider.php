@@ -7,6 +7,8 @@ namespace Witals\Framework\Auth;
 use Witals\Framework\Application;
 use Witals\Framework\Contracts\Auth\TokenStorageInterface;
 use Witals\Framework\Contracts\Auth\HttpTransportInterface;
+use Witals\Framework\Contracts\Auth\RateLimiterInterface;
+use Witals\Framework\Contracts\Session\SessionInterface;
 use Witals\Framework\Auth\TokenStorage\ArrayTokenStorage;
 use Witals\Framework\Auth\Transport\CookieTransport;
 
@@ -32,6 +34,12 @@ class AuthServiceProvider
 
     public function register(): void
     {
+        // 0. Session
+        $this->app->singleton(SessionInterface::class, \Witals\Framework\Session\NativeSession::class);
+        $this->app->singleton(RateLimiterInterface::class, function ($app) {
+            return new \Witals\Framework\Auth\SessionRateLimiter($app->make(SessionInterface::class));
+        });
+
         // 1. Token Storage Registration (Driver-based)
         if (!$this->app->has(TokenStorageInterface::class)) {
             $this->app->singleton(TokenStorageInterface::class, function ($app) {

@@ -64,15 +64,16 @@ class Response
      */
     public function send(): void
     {
-        // Set status code
+        if (headers_sent()) {
+            return;
+        }
+
         http_response_code($this->statusCode);
 
-        // Send headers
         foreach ($this->headers as $name => $value) {
             header("$name: $value");
         }
 
-        // Send content
         echo $this->content;
     }
 
