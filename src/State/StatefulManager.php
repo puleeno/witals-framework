@@ -19,6 +19,16 @@ class StatefulManager implements StateManager
     protected static array $persistentState = [];
 
     /**
+     * TTL timestamps for persistent keys: [key => expires_at]
+     */
+    protected static array $persistentTtl = [];
+
+    /**
+     * Default TTL for persistent state (null = never expires)
+     */
+    protected ?int $defaultPersistentTtl = 3600;
+
+    /**
      * Request-scoped state - cleared after each request
      */
     protected array $requestState = [];
@@ -36,10 +46,17 @@ class StatefulManager implements StateManager
     /**
      * Set a value that persists across requests
      */
-    public function setPersistent(string $key, mixed $value): void
+    public function setPersistent(string $key, mixed $value, ?int $ttl = null): void
     {
         self::$persistentState[$key] = $value;
         $this->persistentKeys[$key] = true;
+
+        if ($ttl !== null || $this->defaultPersistentTtl !== null) {
+            $expires = time() + ($ttl ?? $this->defaultPersistentTtl);
+            self::$persistentTtl[$key] = $expires;
+        } else {
+            unset(self::$persistentTtl[$key]);
+        }
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -49,9 +66,12 @@ class StatefulManager implements StateManager
             return $this->requestState[$key];
         }
 
-        // Then check persistent state
+        // Then check persistent state (with TTL expiry)
         if (array_key_exists($key, self::$persistentState)) {
-            return self::$persistentState[$key];
+            $this->expireIfNeeded($key);
+            if (array_key_exists($key, self::$persistentState)) {
+                return self::$persistentState[$key];
+            }
         }
 
         return $default;
@@ -62,13 +82,18 @@ class StatefulManager implements StateManager
      */
     public function getPersistent(string $key, mixed $default = null): mixed
     {
+        $this->expireIfNeeded($key);
         return self::$persistentState[$key] ?? $default;
     }
 
     public function has(string $key): bool
     {
-        return array_key_exists($key, $this->requestState)
-            || array_key_exists($key, self::$persistentState);
+        if (array_key_exists($key, $this->requestState)) {
+            return true;
+        }
+
+        $this->expireIfNeeded($key);
+        return array_key_exists($key, self::$persistentState);
     }
 
     /**
@@ -76,13 +101,14 @@ class StatefulManager implements StateManager
      */
     public function hasPersistent(string $key): bool
     {
+        $this->expireIfNeeded($key);
         return array_key_exists($key, self::$persistentState);
     }
 
     public function forget(string $key): void
     {
         unset($this->requestState[$key]);
-        unset(self::$persistentState[$key]);
+        unset(self::$persistentState[$key], self::$persistentTtl[$key]);
         unset($this->persistentKeys[$key]);
     }
 
@@ -173,11 +199,31 @@ class StatefulManager implements StateManager
      */
     protected function garbageCollect(): void
     {
-        // Example: Remove expired items, limit size, etc.
-        // This is a simple implementation that limits persistent state size
+        // Remove expired TTL entries
+        $now = time();
+        foreach (self::$persistentTtl as $key => $expires) {
+            if ($expires <= $now) {
+                unset(self::$persistentState[$key], self::$persistentTtl[$key], $this->persistentKeys[$key]);
+            }
+        }
+
+        // Limit persistent state size
         if (count(self::$persistentState) > 1000) {
-            // Keep only the last 800 items
             self::$persistentState = array_slice(self::$persistentState, -800, null, true);
+        }
+    }
+
+    /**
+     * Remove a persistent key if its TTL has expired
+     */
+    protected function expireIfNeeded(string $key): void
+    {
+        if (!isset(self::$persistentTtl[$key])) {
+            return;
+        }
+
+        if (self::$persistentTtl[$key] <= time()) {
+            unset(self::$persistentState[$key], self::$persistentTtl[$key], $this->persistentKeys[$key]);
         }
     }
 

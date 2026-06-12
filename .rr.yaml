@@ -5,7 +5,6 @@ server:
   env:
     - RR_MODE: true
     - AUTH_TOKEN_DRIVER: paseto
-    - APP_KEY: base64:dGVzdC1rZXktZm9yLWRldmVsb3BtZW50LXB1cnBvc2Vz
 
 http:
   address: 0.0.0.0:8080

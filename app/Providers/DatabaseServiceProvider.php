@@ -92,7 +92,14 @@ class DatabaseServiceProvider extends ServiceProvider
             $dbal = $app->make(DatabaseProviderInterface::class);
             
             $cacheFile = $app->basePath('storage/framework/cache/orm_schema.php');
-            $refresh = isset($_GET['refresh_schema']) || !file_exists($cacheFile);
+            $env = getenv('APP_ENV') ?: 'production';
+            $refresh = (
+                $env === 'local' &&
+                isset($_GET['refresh_schema'])
+            ) || (
+                PHP_SAPI === 'cli' &&
+                in_array('--refresh-schema', $_SERVER['argv'] ?? [], true)
+            ) || !file_exists($cacheFile);
 
             if (!$refresh) {
                 $schemaArray = require $cacheFile;
