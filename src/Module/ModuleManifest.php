@@ -40,6 +40,9 @@ class ModuleManifest
         return file_exists($modulePath . '/manifest.json');
     }
 
+    /**
+     * @deprecated Use ModuleManager::discover() instead.
+     */
     public static function find(string $directory): array
     {
         $modules = [];
