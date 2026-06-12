@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Witals\Framework\Lifecycle;
 
 use Witals\Framework\Contracts\LifecycleManager;
-use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
+use Witals\Framework\Application;
+use Witals\Framework\Contracts\ResettableInterface;
 
 /**
  * RoadRunner Lifecycle Manager
@@ -26,7 +27,7 @@ class RoadRunnerLifecycle implements LifecycleManager
     protected int $maxRequestsBeforeRestart = 1000;
     protected int $maxMemoryBeforeRestart;
 
-    public function __construct()
+    public function __construct(protected Application $app)
     {
         // Set max memory to 80% of memory_limit
         $memoryLimit = $this->parseMemoryLimit(ini_get('memory_limit'));
@@ -220,6 +221,16 @@ class RoadRunnerLifecycle implements LifecycleManager
      */
     protected function cleanupRequest(): void
     {
+        // 1. Reset all services implementing ResettableInterface
+        // We get all instances from the container
+        $instances = $this->app->getInstances();
+
+        foreach ($instances as $instance) {
+            if ($instance instanceof ResettableInterface) {
+                $instance->reset();
+            }
+        }
+
         // Close request-specific resources
         // Clear temporary files
         // Reset request-scoped services

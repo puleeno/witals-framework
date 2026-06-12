@@ -32,6 +32,16 @@ class Container implements ContainerContract
     protected array $instances = [];
 
     /**
+     * The container's reflection cache.
+     */
+    protected static array $reflectionCache = [];
+
+    /**
+     * The stack of concretes currently being built.
+     */
+    protected array $buildStack = [];
+
+    /**
      * Get the globally available instance of the container.
      */
     public static function getInstance(): ?self
@@ -148,18 +158,30 @@ class Container implements ContainerContract
 
     public function call(callable $callback, array $parameters = [])
     {
-        if ($callback instanceof Closure) {
-            $reflection = new \ReflectionFunction($callback);
-        } elseif (is_array($callback)) {
-            $reflection = new \ReflectionMethod($callback[0], $callback[1]);
-        } else {
-            $reflection = new \ReflectionMethod($callback, '__invoke');
-        }
-
         $dependencies = $reflection->getParameters();
         $instances = $this->resolveDependencies($dependencies, $parameters);
 
         return call_user_func_array($callback, $instances);
+    }
+
+    /**
+     * Get the reflection for a callback.
+     */
+    protected function getCallReflection(callable $callback): \ReflectionFunctionAbstract
+    {
+        if ($callback instanceof Closure) {
+            return new \ReflectionFunction($callback);
+        }
+
+        if (is_array($callback)) {
+            return new \ReflectionMethod($callback[0], $callback[1]);
+        }
+
+        if (is_string($callback) && strpos($callback, '::') !== false) {
+            return new \ReflectionMethod(...explode('::', $callback));
+        }
+
+        return new \ReflectionMethod($callback, '__invoke');
     }
 
     /**
@@ -200,27 +222,46 @@ class Container implements ContainerContract
             return $concrete($this, ...$parameters);
         }
 
+        // Circular dependency detection
+        if (in_array($concrete, $this->buildStack)) {
+            $path = implode(' -> ', $this->buildStack) . ' -> ' . $concrete;
+            throw new BindingResolutionException("Circular dependency detected: {$path}");
+        }
+
+        $this->buildStack[] = $concrete;
+
         try {
-            $reflector = new ReflectionClass($concrete);
+            if (isset(self::$reflectionCache[$concrete])) {
+                $reflector = self::$reflectionCache[$concrete];
+            } else {
+                $reflector = new ReflectionClass($concrete);
+                self::$reflectionCache[$concrete] = $reflector;
+            }
+
+            if (!$reflector->isInstantiable()) {
+                throw new BindingResolutionException("Target [$concrete] is not instantiable.");
+            }
+
+            $constructor = $reflector->getConstructor();
+
+            // If no constructor, just new it.
+            if (is_null($constructor)) {
+                array_pop($this->buildStack);
+                return new $concrete;
+            }
+
+            $dependencies = $constructor->getParameters();
+            $instances = $this->resolveDependencies($dependencies, $parameters);
+
+            array_pop($this->buildStack);
+            return $reflector->newInstanceArgs($instances);
         } catch (ReflectionException $e) {
+            array_pop($this->buildStack);
             throw new BindingResolutionException("Target class [$concrete] does not exist.", 0, $e);
+        } catch (\Throwable $e) {
+            array_pop($this->buildStack);
+            throw $e;
         }
-
-        if (!$reflector->isInstantiable()) {
-            throw new BindingResolutionException("Target [$concrete] is not instantiable.");
-        }
-
-        $constructor = $reflector->getConstructor();
-
-        // If no constructor, just new it.
-        if (is_null($constructor)) {
-            return new $concrete;
-        }
-
-        $dependencies = $constructor->getParameters();
-        $instances = $this->resolveDependencies($dependencies, $parameters);
-
-        return $reflector->newInstanceArgs($instances);
     }
 
     /**
@@ -305,31 +346,17 @@ class Container implements ContainerContract
     public function runScope(array $bindings, callable $callback)
     {
         // 1. Snapshot valid instances to detect new ones (for cleanup)
-        $instanceSnapshot = array_keys($this->instances);
+        $instanceSnapshot = $this->instances;
+        $bindingSnapshot = $this->bindings;
 
-        // 2. Backup and Apply Scope Bindings
-        $backupBindings = [];
-        $backupInstances = [];
-
+        // 2. Apply Scope Bindings
         foreach ($bindings as $abstract => $concrete) {
-            // Backup existing binding
-            if (isset($this->bindings[$abstract])) {
-                $backupBindings[$abstract] = $this->bindings[$abstract];
-            }
-
-            // Backup existing instance
-            if (isset($this->instances[$abstract])) {
-                $backupInstances[$abstract] = $this->instances[$abstract];
-                // Remove the current instance so the new binding takes effect
-                unset($this->instances[$abstract]);
-            }
-
             // Apply new binding/instance
             if (is_object($concrete) && !$concrete instanceof Closure) {
                 $this->instance($abstract, $concrete);
             } else {
                 // We bind as shared=true (singleton) within the scope by default
-                // to allow state ful services during the request
+                // to allow stateful services during the request
                 $this->singleton($abstract, $concrete);
             }
         }
@@ -337,31 +364,9 @@ class Container implements ContainerContract
         try {
             return $callback($this);
         } finally {
-            // 3. Cleanup: Remove any instances created *during* the scope
-            // This ensures request-scoped services don't leak into the next request
-            $currentInstances = array_keys($this->instances);
-            $newInstances = array_diff($currentInstances, $instanceSnapshot);
-
-            foreach ($newInstances as $abstract) {
-                unset($this->instances[$abstract]);
-            }
-
-            // 4. Restore Backups
-            // Restore instances that were replaced by the scope
-            foreach ($backupInstances as $abstract => $instance) {
-                $this->instances[$abstract] = $instance;
-            }
-
-            // Restore bindings
-            foreach ($bindings as $abstract => $concrete) {
-                // Remove the scope binding
-                unset($this->bindings[$abstract]);
-
-                // Restore original binding if it existed
-                if (isset($backupBindings[$abstract])) {
-                    $this->bindings[$abstract] = $backupBindings[$abstract];
-                }
-            }
+            // 3. Restore Snapshots
+            $this->instances = $instanceSnapshot;
+            $this->bindings = $bindingSnapshot;
         }
     }
 
@@ -379,5 +384,13 @@ class Container implements ContainerContract
     public function has(string $abstract): bool
     {
         return isset($this->bindings[$abstract]) || isset($this->instances[$abstract]);
+    }
+
+    /**
+     * Get all resolved instances.
+     */
+    public function getInstances(): array
+    {
+        return $this->instances;
     }
 }
