@@ -7,13 +7,20 @@ namespace App\Providers;
 use App\Support\ServiceProvider;
 use App\Http\Routing\Router;
 use App\Http\Routing\RouterFactory;
+use App\Http\Routing\RouteRegistry;
 use App\Http\Routing\Contracts\RouterInterface;
+use App\Http\Routing\Contracts\RouteRegistryInterface;
 
 class RouteServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Strategy selected ONCE at boot via Factory — zero per-request overhead
+        // RouteRegistry — single source of truth for all routes
+        $this->app->singleton(RouteRegistryInterface::class, function ($app) {
+            return new RouteRegistry($app);
+        });
+
+        // Router — facade over RouteRegistry with fallback chain
         $this->app->singleton(RouterInterface::class, function ($app) {
             return RouterFactory::create(
                 $app,
@@ -21,7 +28,6 @@ class RouteServiceProvider extends ServiceProvider
             );
         });
 
-        // Keep Router::class alias so existing code that type-hints Router still works
         $this->app->singleton(Router::class, function ($app) {
             return $app->make(RouterInterface::class);
         });
@@ -31,7 +37,6 @@ class RouteServiceProvider extends ServiceProvider
     {
         $router = $this->app->make(RouterInterface::class);
 
-        // Load modern routes
         $this->loadRoutes($router);
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Routing;
 
 use App\Http\Routing\Contracts\RouterInterface;
+use App\Http\Routing\Contracts\RouteRegistryInterface;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 
@@ -72,11 +73,19 @@ class LocalizedRouter extends Router implements RouterInterface
 
         $request = $request->withAttribute('locale', $locale);
 
-        // Route matching against stripped path — NO Request mutation, NO Reflection
+        // Route matching against stripped path via registry
         $method = $request->method();
-        foreach ($this->routes as $route) {
-            if ($route->matchesMethodAndPath($method, $path)) {
-                return $this->runRoute($route, $request);
+
+        $matched = $this->registry->match($request, RouteRegistryInterface::PRIORITY_HOOK, $path);
+        if ($matched !== null) {
+            return $this->registry->runAction($matched['action'], $request, $matched['params']);
+        }
+
+        // Hook-registered routes
+        if ($this->hookFallback !== null) {
+            $result = ($this->hookFallback)($request, ['locale' => $locale]);
+            if ($result !== null) {
+                return $result;
             }
         }
 

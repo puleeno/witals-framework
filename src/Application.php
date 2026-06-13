@@ -577,19 +577,20 @@ class Application extends Container
         // 3. Trigger beforeRequest callbacks
         $this->callBeforeRequestCallbacks($request);
 
-        // 4. Try module dispatch first (route modules)
-        if ($this->has(\Witals\Framework\Module\ModuleManager::class)) {
-            $moduleResponse = $this->make(\Witals\Framework\Module\ModuleManager::class)->dispatch($request);
+        // 4. Dispatch via RouteRegistry (module → native → hook → fallback)
+        if ($this->has(\App\Http\Routing\Contracts\RouteRegistryInterface::class)) {
+            $registry = $this->make(\App\Http\Routing\Contracts\RouteRegistryInterface::class);
+            $response = $registry->dispatch($request);
 
-            if ($moduleResponse !== null) {
+            if ($response !== null) {
                 return $this->runScope(
                     [Request::class => $request],
-                    fn () => $moduleResponse
+                    fn () => $response
                 );
             }
         }
 
-        // 5. Fallback to regular HTTP Kernel
+        // 5. Fallback to HTTP Kernel
         $handler = new \Witals\Framework\Http\RequestHandler(
             $this,
             $this->make(\Witals\Framework\Contracts\Http\Kernel::class)

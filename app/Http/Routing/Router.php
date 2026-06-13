@@ -8,48 +8,51 @@ use Witals\Framework\Application;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Psr\Log\LoggerInterface;
-
 use App\Http\Routing\Contracts\RouterInterface;
+use App\Http\Routing\Contracts\RouteRegistryInterface;
 
 class Router implements RouterInterface
 {
-    protected Application $app;
+    protected RouteRegistryInterface $registry;
     protected \Psr\Log\LoggerInterface $logger;
-    protected array $routes = [];
     protected ?\Closure $wordPressFallback = null;
+    protected ?\Closure $hookFallback = null;
 
     public function __construct(Application $app, \Psr\Log\LoggerInterface $logger)
     {
-        $this->app = $app;
+        $this->registry = $app->make(RouteRegistryInterface::class);
         $this->logger = $logger;
     }
 
-    public function get(string $path, $action): Route
+    public function get(string $path, $action): void
     {
-        return $this->addRoute('GET', $path, $action);
+        $this->addRoute('GET', $path, $action);
     }
 
-    public function post(string $path, $action): Route
+    public function post(string $path, $action): void
     {
-        return $this->addRoute('POST', $path, $action);
+        $this->addRoute('POST', $path, $action);
     }
 
-    public function put(string $path, $action): Route
+    public function put(string $path, $action): void
     {
-        return $this->addRoute('PUT', $path, $action);
+        $this->addRoute('PUT', $path, $action);
     }
 
-    public function delete(string $path, $action): Route
+    public function delete(string $path, $action): void
     {
-        return $this->addRoute('DELETE', $path, $action);
+        $this->addRoute('DELETE', $path, $action);
     }
 
-    protected function addRoute(string $method, string $path, $action): Route
+    protected function addRoute(string $method, string $path, $action): void
     {
-        $route = new Route($method, $path, $action);
-        $this->routes[] = $route;
+        $this->registry->addRoute(
+            method: $method,
+            path: $path,
+            action: $action,
+            priority: RouteRegistryInterface::PRIORITY_NATIVE,
+        );
         $this->logger->debug("Router: Registered route {method} {path}", ['method' => $method, 'path' => $path]);
-        return $route;
     }
 
     public function setWordPressFallback(callable $fallback): void
@@ -57,30 +60,43 @@ class Router implements RouterInterface
         $this->wordPressFallback = $fallback;
     }
 
+    public function setHookFallback(callable $hook): void
+    {
+        $this->hookFallback = $hook;
+    }
+
     public function dispatch(Request $request): mixed
     {
-        $path = $request->path();
+        $path = '/' . ltrim($request->path(), '/');
         $this->logger->debug("Router: dispatching {method} {path}", [
             'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
             'path' => $path,
         ]);
-        
-        foreach ($this->routes as $route) {
-            if ($route->matches($request)) {
-                $this->logger->info("Router: Match found for {method} {path}", [
-                    'method' => $request->method(),
-                    'path' => $path
-                ]);
-                return $this->runRoute($route, $request);
+
+        // 1. Try module routes (PRIORITY_MODULE = 0) + native routes (PRIORITY_NATIVE = 1)
+        $result = $this->registry->dispatch($request);
+        if ($result !== null) {
+            $this->logger->info("Router: Match found via registry for {method} {path}", [
+                'method' => $request->method(),
+                'path' => $path,
+            ]);
+            return $result;
+        }
+
+        // 2. Try hook-registered routes (PRIORITY_HOOK = 2)
+        if ($this->hookFallback !== null) {
+            $hookResult = ($this->hookFallback)($request);
+            if ($hookResult !== null) {
+                return $hookResult;
             }
         }
 
+        // 3. Try WordPress rewrite rules (PRIORITY_FALLBACK)
         $this->logger->info("Router: No match for {method} {path}", [
             'method' => $request->method(),
-            'path' => $path
+            'path' => $path,
         ]);
 
-        // If no native route matches, try WordPress rewrite rules
         if ($this->wordPressFallback) {
             return ($this->wordPressFallback)($request);
         }
@@ -88,27 +104,8 @@ class Router implements RouterInterface
         return Response::json(['error' => 'Not Found'], 404);
     }
 
-    protected function runRoute(Route $route, Request $request): mixed
-    {
-        $action = $route->getAction();
-
-        if ($action instanceof \Closure) {
-            return $this->app->call($action, array_merge(['request' => $request], $route->getParameters()));
-        }
-
-        if (is_array($action)) {
-            [$controller, $method] = $action;
-            if (is_string($controller)) {
-                $controller = $this->app->make($controller);
-            }
-            return $this->app->call([$controller, $method], array_merge(['request' => $request], $route->getParameters()));
-        }
-
-        return $action;
-    }
-
     public function getRoutes(): array
     {
-        return $this->routes;
+        return $this->registry->getAll();
     }
 }

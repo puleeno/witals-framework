@@ -172,6 +172,12 @@ class Application extends BaseApplication
         if ($this->moduleManager) {
             $this->moduleManager->discover();
             $this->moduleManager->loadEnabled();
+
+            // Register module routes into unified RouteRegistry
+            if ($this->has(\App\Http\Routing\Contracts\RouteRegistryInterface::class)) {
+                $registry = $this->make(\App\Http\Routing\Contracts\RouteRegistryInterface::class);
+                $this->moduleManager->registerModuleRoutes($registry);
+            }
         }
 
         // Boot providers

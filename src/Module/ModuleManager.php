@@ -9,6 +9,7 @@ use Psr\Log\LoggerInterface;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Module\Contracts\ModuleInterface;
+use App\Http\Routing\Contracts\RouteRegistryInterface;
 
 class ModuleManager implements Contracts\ModuleManagerInterface
 {
@@ -314,6 +315,51 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         }
 
         return null;
+    }
+
+    public function registerModuleRoutes(RouteRegistryInterface $registry): void
+    {
+        $this->discover();
+
+        foreach ($this->metadataMap as $name => $meta) {
+            if (!($meta['enabled'] ?? false)) {
+                continue;
+            }
+
+            $routes = $meta['routes'] ?? [];
+            if ($routes === []) {
+                continue;
+            }
+
+            $modulePrefix = $meta['route_prefix'] ?? '';
+            $routePrefix = $modulePrefix !== '' ? '/' . ltrim($modulePrefix, '/') : '';
+
+            foreach ($routes as $route) {
+                if (!isset($route['method'], $route['path'], $route['handler'])) {
+                    continue;
+                }
+
+                $method = strtoupper($route['method']);
+                $path = $routePrefix . '/' . ltrim($route['path'], '/');
+                $handler = $route['handler'];
+
+                $registry->addRoute(
+                    method: $method,
+                    path: $path,
+                    action: $this->wrapModuleHandler($name, $handler),
+                    priority: RouteRegistryInterface::PRIORITY_MODULE,
+                    options: ['module' => $name, 'function' => $meta['_function'] ?? null],
+                );
+            }
+        }
+    }
+
+    protected function wrapModuleHandler(string $moduleName, string $handler): \Closure
+    {
+        return function (Request $request) use ($moduleName, $handler) {
+            $response = $this->executeHandler($handler, $request, []);
+            return $response;
+        };
     }
 
     public function dispatch(Request $request): ?Response
