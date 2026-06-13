@@ -29,14 +29,135 @@ class ContextLoader implements ContextLoaderInterface
         protected string $apiBase = '/api/context/block',
     ) {}
 
-    public function load(ContextInterface $context): Response
+    public function load(ContextInterface $context, string $format = ContextLoaderInterface::FORMAT_HTML): Response
     {
+        if ($format === ContextLoaderInterface::FORMAT_JSON) {
+            return Response::json($this->toArray($context));
+        }
+
+        if ($format === ContextLoaderInterface::FORMAT_XML) {
+            return Response::html($this->toXml($context), 200, ['Content-Type' => 'application/xml']);
+        }
+
         $this->reset();
 
         $html = $this->renderDocument($context);
         $this->reset();
 
         return Response::html($html);
+    }
+
+    public function toArray(ContextInterface $context): array
+    {
+        $tree = $context->getBlockTree();
+
+        return [
+            'context' => [
+                'type' => $context->getType(),
+                'identifier' => $context->getIdentifier(),
+                'label' => $context->getLabel(),
+                'description' => $context->getDescription(),
+            ],
+            'metadata' => $context->getMetadata(),
+            'data' => $context->getData(),
+            'blocks' => $this->blockTreeToArray($tree, $context),
+        ];
+    }
+
+    public function toJson(ContextInterface $context): string
+    {
+        return json_encode($this->toArray($context), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function toXml(ContextInterface $context): string
+    {
+        $data = $this->toArray($context);
+        return '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . $this->arrayToXml($data);
+    }
+
+    protected function blockTreeToArray(array $blockTree, ContextInterface $context): array
+    {
+        $result = [];
+
+        foreach ($blockTree as $node) {
+            $blockId = $node['blockId'] ?? '';
+            if ($blockId === '@core/html') {
+                $result[] = [
+                    'type' => 'html',
+                    'content' => $node['attributes']['content'] ?? '',
+                ];
+                continue;
+            }
+
+            $block = $this->blockManager->getBlock($blockId);
+            $entry = [
+                'type' => $blockId,
+                'attributes' => $node['attributes'] ?? [],
+                'mode' => $node['mode'] ?? BlockInterface::MODE_SSR,
+            ];
+
+            if (!empty($node['children'])) {
+                $entry['children'] = $this->blockTreeToArray($node['children'], $context);
+            }
+
+            if ($block !== null) {
+                $entry['name'] = $block->getName();
+                $entry['category'] = $block->getCategory();
+            }
+
+            $result[] = $entry;
+        }
+
+        return $result;
+    }
+
+    protected function arrayToXml(array $data, string $parentKey = 'context'): string
+    {
+        $xml = '';
+
+        foreach ($data as $key => $value) {
+            if (is_int($key)) {
+                $tag = 'item';
+            } else {
+                $tag = $key;
+            }
+
+            if (is_array($value)) {
+                if ($this->isAssoc($value)) {
+                    $xml .= '<' . $tag . '>' . "\n";
+                    $xml .= $this->arrayToXml($value, $tag);
+                    $xml .= '</' . $tag . '>' . "\n";
+                } else {
+                    $xml .= '<' . $tag . '>' . "\n";
+                    foreach ($value as $item) {
+                        if (is_array($item)) {
+                            $xml .= '<item>' . "\n";
+                            $xml .= $this->arrayToXml($item, 'item');
+                            $xml .= '</item>' . "\n";
+                        } else {
+                            $xml .= '<item>' . $this->escapeXml((string) $item) . '</item>' . "\n";
+                        }
+                    }
+                    $xml .= '</' . $tag . '>' . "\n";
+                }
+            } else {
+                $xml .= '<' . $tag . '>' . $this->escapeXml((string) $value) . '</' . $tag . '>' . "\n";
+            }
+        }
+
+        return $xml;
+    }
+
+    protected function isAssoc(array $arr): bool
+    {
+        if ($arr === []) return false;
+        return array_keys($arr) !== range(0, count($arr) - 1);
+    }
+
+    protected function escapeXml(string $value): string
+    {
+        return str_replace(['&', '<', '>', '"', "'"], ['&amp;', '&lt;', '&gt;', '&quot;', '&apos;'], $value);
     }
 
     public function renderBlocks(array $blockTree, ContextInterface $context): string
