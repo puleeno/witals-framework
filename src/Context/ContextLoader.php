@@ -36,7 +36,7 @@ class ContextLoader implements ContextLoaderInterface
         }
 
         if ($format === ContextLoaderInterface::FORMAT_XML) {
-            return Response::html($this->toXml($context), 200, ['Content-Type' => 'application/xml']);
+            return new Response($this->toXml($context), 200, ['Content-Type' => 'application/xml']);
         }
 
         $this->reset();
@@ -73,7 +73,9 @@ class ContextLoader implements ContextLoaderInterface
     {
         $data = $this->toArray($context);
         return '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
-            . $this->arrayToXml($data);
+            . '<response>' . "\n"
+            . $this->arrayToXml($data)
+            . '</response>' . "\n";
     }
 
     protected function blockTreeToArray(array $blockTree, ContextInterface $context): array
