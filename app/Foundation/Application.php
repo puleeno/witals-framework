@@ -176,7 +176,12 @@ class Application extends BaseApplication
             // Register module routes into unified RouteRegistry
             if ($this->has(\App\Http\Routing\Contracts\RouteRegistryInterface::class)) {
                 $registry = $this->make(\App\Http\Routing\Contracts\RouteRegistryInterface::class);
-                $this->moduleManager->registerModuleRoutes($registry);
+
+                // Delegate to Witals ModuleManager (scans framework/presto/modules/)
+                if ($this->has(\Witals\Framework\Module\ModuleManager::class)) {
+                    $witalsManager = $this->make(\Witals\Framework\Module\ModuleManager::class);
+                    $witalsManager->registerModuleRoutes($registry);
+                }
             }
         }
 
