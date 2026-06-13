@@ -86,7 +86,7 @@ class LogManager extends AbstractLogger
      */
     protected function createStandardDriver(array $config): LoggerInterface
     {
-        $path = $config['path'] ?? '/home/puleeno/Projects/witals.com/storage/logs/witals.log';
+        $path = $config['path'] ?? sys_get_temp_dir() . '/witals.log';
         $buffered = $config['buffered'] ?? true;
         $level = $config['level'] ?? 'debug';
         
