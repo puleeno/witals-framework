@@ -354,7 +354,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         }
     }
 
-    protected function wrapModuleHandler(string $moduleName, string $handler): \Closure
+    protected function wrapModuleHandler(string $moduleName, array $handler): \Closure
     {
         return function (Request $request) use ($moduleName, $handler) {
             $response = $this->executeHandler($handler, $request, []);

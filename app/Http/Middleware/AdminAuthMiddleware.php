@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use Witals\Framework\Contracts\Auth\AuthContextInterface;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
+use App\Foundation\Application;
 
 /**
  * Admin Authentication Middleware
@@ -17,14 +18,19 @@ use Witals\Framework\Http\Response;
  *
  * If not authenticated, redirects to login page.
  * If authenticated but not admin, returns 403 Forbidden.
+ *
+ * Auth can be bypassed in development via config/admin.php auth.enabled=false.
  */
 class AdminAuthMiddleware
 {
     protected AuthContextInterface $auth;
 
-    public function __construct(AuthContextInterface $auth)
+    protected Application $app;
+
+    public function __construct(AuthContextInterface $auth, Application $app)
     {
         $this->auth = $auth;
+        $this->app = $app;
     }
 
     public function handle(Request $request, callable $next): Response
@@ -36,6 +42,11 @@ class AdminAuthMiddleware
             return $next($request);
         }
 
+        // Skip auth check when disabled in config (dev mode)
+        if (!$this->app->config('admin.auth.enabled', false)) {
+            return $next($request);
+        }
+
         // Check if user is authenticated
         $token = $this->auth->getToken();
         if ($token === null) {
@@ -44,7 +55,6 @@ class AdminAuthMiddleware
 
         // Check if user has admin role
         $actor = $this->auth->getActor();
-        $token = $this->auth->getToken();
 
         if (!$this->isAdmin($actor, $token)) {
             return $this->forbidden();
