@@ -418,10 +418,7 @@ class AuthController
 
                 // Handle standard bcrypt/argon2
                 if (str_starts_with($hash, '$P$') || str_starts_with($hash, '$H$')) {
-                    // This would normally require Phpass, but let's try a simple MD5 check if it's legacy
-                    // or if wordpress bridge provides a hasher. 
-                    // For now, if we can't verify PHPass easily without the library, 
-                    // we'll assume the user might need to reset or we use a helper if available.
+                    $isValid = $this->verifyPhpassHash($password, $hash);
                 } elseif (strlen($hash) === 32) {
                     // Legacy MD5 — not secure. Prompt password reset instead.
                     // Instead of silently verifying with MD5, redirect to password reset.
@@ -479,10 +476,70 @@ class AuthController
     private function safeRedirect(string $url): string
     {
         if ($url === '' || str_starts_with($url, '/')) {
+            if (str_starts_with($url, '//')) {
+                return '/dashboard';
+            }
             return $url;
         }
 
         return '/dashboard';
+    }
+
+    private function verifyPhpassHash(string $password, string $hash): bool
+    {
+        if (!str_starts_with($hash, '$P$') && !str_starts_with($hash, '$H$')) {
+            return false;
+        }
+
+        $itoa64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+        $countLog2 = strpos($itoa64, $hash[3]);
+        if ($countLog2 < 7 || $countLog2 > 30) {
+            return false;
+        }
+
+        $count = 1 << $countLog2;
+        $salt = substr($hash, 4, 8);
+
+        if (strlen($salt) !== 8) {
+            return false;
+        }
+
+        $digest = md5($salt . $password, true);
+        for ($i = 0; $i < $count; $i++) {
+            $digest = md5($digest . $password, true);
+        }
+
+        $expected = substr($hash, 0, 12) . $this->phpassEncode64($digest, 16, $itoa64);
+
+        return hash_equals($hash, $expected);
+    }
+
+    private function phpassEncode64(string $input, int $length, string $itoa64): string
+    {
+        $output = '';
+        $i = 0;
+        do {
+            $value = ord($input[$i++]);
+            $output .= $itoa64[$value & 0x3f];
+            if ($i < $length) {
+                $value |= ord($input[$i]) << 8;
+            }
+            $output .= $itoa64[($value >> 6) & 0x3f];
+            if ($i++ >= $length) {
+                break;
+            }
+            if ($i < $length) {
+                $value |= ord($input[$i]) << 16;
+            }
+            $output .= $itoa64[($value >> 12) & 0x3f];
+            if ($i++ >= $length) {
+                break;
+            }
+            $output .= $itoa64[($value >> 18) & 0x3f];
+        } while ($i < $length);
+
+        return $output;
     }
 
     private function csrfToken(): string

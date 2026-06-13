@@ -9,7 +9,7 @@ use Witals\Framework\Http\Response;
 
 class CorsMiddleware
 {
-    protected array $allowedOrigins = ['*'];
+    protected array $allowedOrigins;
 
     protected array $allowedMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
@@ -22,6 +22,20 @@ class CorsMiddleware
     ];
 
     protected int $maxAge = 86400;
+
+    public function __construct()
+    {
+        $origins = env('CORS_ALLOWED_ORIGINS', '');
+        if ($origins === '*') {
+            $this->allowedOrigins = ['*'];
+        } elseif ($origins !== '') {
+            $this->allowedOrigins = array_map('trim', explode(',', $origins));
+        } elseif (env('APP_ENV', 'production') !== 'production') {
+            $this->allowedOrigins = ['*'];
+        } else {
+            $this->allowedOrigins = [];
+        }
+    }
 
     public function handle(Request $request, \Closure $next): Response
     {
