@@ -270,4 +270,64 @@
 │                           ↓                                  │
 │                SWOOLE / OPENSWOOLE                           │
 └─────────────────────────────────────────────────────────────┘
+
+## Rendering Architecture
+
+Three independent rendering pathways, **no coupling between them**. The route registry dispatches any callable — it knows nothing about Context.
+
+```
+RouteRegistry::dispatch()
+    │
+    ├── Closure / [Controller, method]       → return Response
+    │   (Traditional MVC, Laravel-style)
+    │
+    ├── Invokable handler                    → return Response
+    │   (Any PSR-15/arbitrary callable)
+    │
+    └── ContextInterface                     → ContextLoader
+        (Block-based layout rendering)
+```
+
+| Pathway | Handler | Use When |
+|---------|---------|----------|
+| **Traditional MVC** | `fn() => view('blog.post', $data)` or `return Response::json(...)` | Laravel-style pages, REST APIs, devs who don't need block editor |
+| **Context render** | `fn() => $loader->load($context, 'html')` | Block-based layout with drag-drop editor |
+| **Context API** | `fn() => $loader->load($context, 'json')` or `'xml'` | API consumers that need block tree as structured data |
+| **Hybrid** | Controller returns context blocks when available, view fallback when not | Module with both block-driven pages and static pages |
+
+### API Response Formats
+
+Context data serializes to **JSON** or **XML** without HTML rendering:
+
+```php
+// JSON — structured block tree
+$loader->load($context, 'json');
+// Response: Content-Type application/json
+// { "context": { "type": "page", ... }, "blocks": [...] }
+
+// XML — same data as XML
+$loader->load($context, 'xml');
+// Response: Content-Type application/xml
+```
+
+Direct API responses bypass context entirely:
+
+```php
+// routes/web.php
+Route::get('/api/posts', function () {
+    return Response::json(['posts' => Post::all()]);
+});
+
+Route::get('/api/posts/{id}', [PostController::class, 'show']);
+// PostController returns Response::json() or Response::xml()
+```
+
+### Context is Optional
+
+`Witals\Framework\Context\` is a **self-contained namespace** with zero dependency on routing. No hard coupling. If a module or developer doesn't need block-based layouts, they simply don't use it — routes still work, controllers still work, everything still works.
+
+```
+Route → any handler → return Response     ✓ works without Context
+Route → ContextLoader → return html/json/xml   ✓ works with Context
+```
 ```
