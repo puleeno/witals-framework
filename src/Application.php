@@ -83,6 +83,30 @@ class Application extends Container
         
         $this->alias(ExceptionHandlerInterface::class, ExceptionHandler::class);
 
+        // Asset Registry — smart asset management with SSR/CSR modes
+        $this->singleton(\Witals\Framework\Support\Assets\Contracts\AssetRegistryInterface::class, function ($app) {
+            $baseUrl = rtrim(env('APP_URL', ''), '/');
+            $publicPath = $app->basePath('public');
+            $transformer = $app->make(\Witals\Framework\Support\Assets\Contracts\AssetTransformInterface::class);
+            $registry = new \Witals\Framework\Support\Assets\AssetRegistry(
+                baseUrl: $baseUrl,
+                publicPath: $publicPath,
+                transformer: $transformer,
+            );
+            $configAssetFile = $app->basePath('config/assets.php');
+            if (file_exists($configAssetFile)) {
+                $config = require $configAssetFile;
+                if (is_array($config)) {
+                    $registry->loadConfig($config);
+                }
+            }
+            return $registry;
+        });
+
+        $this->singleton(\Witals\Framework\Support\Assets\Contracts\AssetTransformInterface::class, function () {
+            return new \Witals\Framework\Support\Assets\Transformers\UrlRewriter();
+        });
+
         // Concurrent / Fiber — enabled for long-running runtimes
         $this->singleton(\Witals\Framework\Contracts\ConcurrentManager::class, function ($app) {
             return new \Witals\Framework\Concurrent\FiberManager(
