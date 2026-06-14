@@ -23,14 +23,14 @@ use App\Foundation\Application;
  */
 class AdminAuthMiddleware
 {
-    protected AuthContextInterface $auth;
+    protected ?AuthContextInterface $auth;
 
     protected Application $app;
 
-    public function __construct(AuthContextInterface $auth, Application $app)
+    public function __construct(Application $app, ?AuthContextInterface $auth = null)
     {
-        $this->auth = $auth;
         $this->app = $app;
+        $this->auth = $auth;
     }
 
     public function handle(Request $request, callable $next): Response
@@ -45,6 +45,10 @@ class AdminAuthMiddleware
         // Skip auth check when disabled in config (dev mode)
         if (!$this->app->config('admin.auth.enabled', false)) {
             return $next($request);
+        }
+
+        if ($this->auth === null) {
+            return $this->redirectToLogin($request);
         }
 
         // Check if user is authenticated

@@ -19,6 +19,8 @@ class RouteRegistry implements RouteRegistryInterface
     protected array $staticIndex = [];
     protected array $dynamicIndex = [];
 
+    protected array $middleware = [];
+
     protected const PARAM_REGEX = '/\{(\w+)(\??)(?::((?:[^{}]|\{[^{}]*\})+))?\}/';
 
     public function __construct(
@@ -27,6 +29,21 @@ class RouteRegistry implements RouteRegistryInterface
         for ($i = 0; $i <= self::PRIORITY_FALLBACK; $i++) {
             $this->routes[$i] = [];
         }
+    }
+
+    public function addMiddleware(string $middleware): void
+    {
+        $this->middleware[] = $middleware;
+    }
+
+    public function setMiddleware(array $middleware): void
+    {
+        $this->middleware = $middleware;
+    }
+
+    public function getMiddleware(): array
+    {
+        return $this->middleware;
     }
 
     public function addRoute(string $method, string $path, mixed $action, int $priority = self::PRIORITY_NATIVE, array $options = []): void
@@ -110,7 +127,41 @@ class RouteRegistry implements RouteRegistryInterface
             return null;
         }
 
-        return $this->runAction($matched['action'], $request, $matched['params']);
+        if ($this->middleware === []) {
+            return $this->runAction($matched['action'], $request, $matched['params']);
+        }
+
+        $destination = function (Request $request) use ($matched) {
+            return $this->runAction($matched['action'], $request, $matched['params']);
+        };
+
+        return $this->runMiddlewarePipeline($request, $this->middleware, $destination);
+    }
+
+    protected function runMiddlewarePipeline(Request $request, array $pipeline, callable $destination): Response
+    {
+        $middleware = array_shift($pipeline);
+
+        if ($middleware === null) {
+            return $destination($request);
+        }
+
+        $next = function (Request $nextRequest) use ($pipeline, $destination) {
+            return $this->runMiddlewarePipeline($nextRequest, $pipeline, $destination);
+        };
+
+        if ($middleware instanceof \Closure) {
+            return $middleware($request, $next);
+        }
+
+        if (is_string($middleware)) {
+            $instance = $this->app->make($middleware);
+            if (method_exists($instance, 'handle')) {
+                return $instance->handle($request, $next);
+            }
+        }
+
+        throw new \RuntimeException("Invalid middleware: " . json_encode($middleware));
     }
 
     public function getAll(): array

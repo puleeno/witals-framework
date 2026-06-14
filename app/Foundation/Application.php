@@ -182,6 +182,11 @@ class Application extends BaseApplication
                     $witalsManager = $this->make(\Witals\Framework\Module\ModuleManager::class);
                     $witalsManager->registerModuleRoutes($registry);
                 }
+
+                // Register middleware for module routes
+                $registry->addMiddleware(\App\Http\Middleware\AdminAuthMiddleware::class);
+                $registry->addMiddleware(\App\Http\Middleware\CorsMiddleware::class);
+                $registry->addMiddleware(\App\Http\Middleware\LocaleMiddleware::class);
             }
         }
 
