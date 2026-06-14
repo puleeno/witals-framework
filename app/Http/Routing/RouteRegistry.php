@@ -33,12 +33,42 @@ class RouteRegistry implements RouteRegistryInterface
 
     public function addMiddleware(string $middleware): void
     {
-        $this->middleware[] = $middleware;
+        $this->middleware[] = ['middleware' => $middleware];
+    }
+
+    public function addMiddlewareFor(string $middleware, array|string $only, ?array $except = null): void
+    {
+        $entry = ['middleware' => $middleware];
+
+        if (is_string($only)) {
+            $only = [$only];
+        }
+        if ($only !== []) {
+            $entry['only'] = $only;
+        }
+        if ($except !== null) {
+            if (is_string($except)) {
+                $except = [$except];
+            }
+            $entry['except'] = $except;
+        }
+
+        $this->middleware[] = $entry;
     }
 
     public function setMiddleware(array $middleware): void
     {
-        $this->middleware = $middleware;
+        $normalized = [];
+        foreach ($middleware as $key => $entry) {
+            if (is_string($entry)) {
+                $normalized[] = ['middleware' => $entry];
+            } elseif (is_array($entry) && isset($entry['middleware'])) {
+                $normalized[] = $entry;
+            } elseif (is_array($entry) && isset($entry[0])) {
+                $normalized[] = ['middleware' => $entry[0]];
+            }
+        }
+        $this->middleware = $normalized;
     }
 
     public function getMiddleware(): array
@@ -131,14 +161,16 @@ class RouteRegistry implements RouteRegistryInterface
             return $this->runAction($matched['action'], $request, $matched['params']);
         }
 
+        $matchedPath = '/' . ltrim($request->path(), '/');
+
         $destination = function (Request $request) use ($matched) {
             return $this->runAction($matched['action'], $request, $matched['params']);
         };
 
-        return $this->runMiddlewarePipeline($request, $this->middleware, $destination);
+        return $this->runMiddlewarePipeline($request, $matchedPath, $this->middleware, $destination);
     }
 
-    protected function runMiddlewarePipeline(Request $request, array $pipeline, callable $destination): Response
+    protected function runMiddlewarePipeline(Request $request, string $path, array $pipeline, callable $destination): Response
     {
         $middleware = array_shift($pipeline);
 
@@ -146,19 +178,46 @@ class RouteRegistry implements RouteRegistryInterface
             return $destination($request);
         }
 
-        $next = function (Request $nextRequest) use ($pipeline, $destination) {
-            return $this->runMiddlewarePipeline($nextRequest, $pipeline, $destination);
-        };
-
-        if ($middleware instanceof \Closure) {
-            return $middleware($request, $next);
+        // Normalize — string shorthand means global middleware
+        if (is_string($middleware)) {
+            $middleware = ['middleware' => $middleware];
         }
 
-        if (is_string($middleware)) {
-            $instance = $this->app->make($middleware);
+        // Lazy-load: skip middleware that doesn't match this request path
+        if (isset($middleware['only'])) {
+            $matches = false;
+            foreach ((array) $middleware['only'] as $pattern) {
+                if (str_starts_with($path, $pattern)) {
+                    $matches = true;
+                    break;
+                }
+            }
+            if (!$matches) {
+                return $this->runMiddlewarePipeline($request, $path, $pipeline, $destination);
+            }
+        }
+
+        if (isset($middleware['except'])) {
+            foreach ((array) $middleware['except'] as $pattern) {
+                if (str_starts_with($path, $pattern)) {
+                    return $this->runMiddlewarePipeline($request, $path, $pipeline, $destination);
+                }
+            }
+        }
+
+        $next = function (Request $nextRequest) use ($path, $pipeline, $destination) {
+            return $this->runMiddlewarePipeline($nextRequest, $path, $pipeline, $destination);
+        };
+
+        if (isset($middleware['middleware'])) {
+            $instance = $this->app->make($middleware['middleware']);
             if (method_exists($instance, 'handle')) {
                 return $instance->handle($request, $next);
             }
+        }
+
+        if ($middleware instanceof \Closure) {
+            return $middleware($request, $next);
         }
 
         throw new \RuntimeException("Invalid middleware: " . json_encode($middleware));
