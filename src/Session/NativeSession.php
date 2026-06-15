@@ -12,11 +12,9 @@ class NativeSession implements SessionInterface
 
     public function start(): void
     {
-        if ($this->started) {
-            return;
-        }
-
         if (session_status() === PHP_SESSION_NONE) {
+            // In long-running environments, we must ensure $_SESSION is fresh
+            // for each request if using native sessions.
             session_start();
         }
 
@@ -81,5 +79,14 @@ class NativeSession implements SessionInterface
     {
         $this->start();
         session_regenerate_id(true);
+    }
+
+    public function close(): void
+    {
+        if ($this->started || session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+            $_SESSION = [];
+            $this->started = false;
+        }
     }
 }

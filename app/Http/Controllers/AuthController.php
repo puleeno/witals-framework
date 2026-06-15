@@ -326,7 +326,17 @@ class AuthController
             ]);
         }
 
-        if (!$this->validateCsrf($request->post('_token', ''))) {
+        $token = $request->post('_token', '');
+        $session = $this->app->make(SessionInterface::class);
+        $expected = $session->get('_csrf_token', '');
+
+        $this->app->make(LoggerInterface::class)->debug('Auth: CSRF check', [
+            'received' => $token,
+            'expected' => $expected,
+            'session_id' => session_id(),
+        ]);
+
+        if ($token === '' || $expected === '' || !hash_equals($expected, $token)) {
             return Response::html('', 302, [
                 'Location' => '/login?error=' . urlencode('Invalid or expired session token. Please try again.') . '&redirect=' . urlencode($redirect)
             ]);

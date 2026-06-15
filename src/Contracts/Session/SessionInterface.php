@@ -15,4 +15,5 @@ interface SessionInterface
     public function destroy(): void;
     public function getId(): string;
     public function regenerate(): void;
+    public function close(): void;
 }

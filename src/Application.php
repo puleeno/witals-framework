@@ -629,8 +629,14 @@ class Application extends Container
      */
     public function afterRequest(Request $request, Response $response): void
     {
+        // Close session to ensure it's written and fresh for next request
+        if ($this->has(\Witals\Framework\Contracts\Session\SessionInterface::class)) {
+            $this->make(\Witals\Framework\Contracts\Session\SessionInterface::class)->close();
+        }
+
         if ($this->isLongRunning()) {
             $this->callTerminatingCallbacks();
+
             
             // Clear request-scoped state in manager
             if ($this->stateManager && method_exists($this->stateManager, 'afterRequest')) {
