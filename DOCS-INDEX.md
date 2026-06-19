@@ -31,6 +31,13 @@ Welcome to the Witals Framework documentation! This framework supports multiple 
   - Performance buffering and flushing.
   - Traceability and JSON formatting.
 
+- **[HOOKS.md](HOOKS.md)** - Hook System (Actions & Filters).
+  - Actions vs Filters.
+  - HookInterface contract (8 methods).
+  - Global helpers: add_action, do_action, add_filter, apply_filters.
+  - Priority system & best practices.
+  - Container binding & project override guide.
+
 - **[docs/ASSET-MANAGER.md](docs/ASSET-MANAGER.md)** - Intelligent Asset Resolution.
   - Context-aware rendering (external vs inline).
   - Dependency resolution (Topological Sort).
