@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Witals\Framework\Module;
 
+use Witals\Framework\Module\Contracts\HookInterface;
 use Witals\Framework\Support\ServiceProvider;
 
 class ModuleServiceProvider extends ServiceProvider
@@ -17,6 +18,8 @@ class ModuleServiceProvider extends ServiceProvider
         $this->app->singleton(Hook::class, function () {
             return new Hook();
         });
+
+        $this->app->singleton(HookInterface::class, Hook::class);
 
         $this->app->alias(ModuleManager::class, 'module.manager');
         $this->app->alias(Hook::class, 'hooks');

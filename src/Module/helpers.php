@@ -1,5 +1,7 @@
 <?php
 
+use Witals\Framework\Module\Contracts\HookInterface;
+
 if (!function_exists('module')) {
     function module(?string $name = null): mixed
     {
@@ -16,27 +18,27 @@ if (!function_exists('module')) {
 if (!function_exists('add_action')) {
     function add_action(string $hook, callable $callback, int $priority = 10): void
     {
-        app(\Witals\Framework\Module\Hook::class)->addAction($hook, $callback, $priority);
+        app(HookInterface::class)->addAction($hook, $callback, $priority);
     }
 }
 
 if (!function_exists('do_action')) {
     function do_action(string $hook, mixed ...$args): void
     {
-        app(\Witals\Framework\Module\Hook::class)->doAction($hook, ...$args);
+        app(HookInterface::class)->doAction($hook, ...$args);
     }
 }
 
 if (!function_exists('add_filter')) {
     function add_filter(string $hook, callable $callback, int $priority = 10): void
     {
-        app(\Witals\Framework\Module\Hook::class)->addFilter($hook, $callback, $priority);
+        app(HookInterface::class)->addFilter($hook, $callback, $priority);
     }
 }
 
 if (!function_exists('apply_filters')) {
     function apply_filters(string $hook, mixed $value, mixed ...$args): mixed
     {
-        return app(\Witals\Framework\Module\Hook::class)->applyFilters($hook, $value, ...$args);
+        return app(HookInterface::class)->applyFilters($hook, $value, ...$args);
     }
 }
