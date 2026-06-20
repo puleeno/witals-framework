@@ -42,9 +42,14 @@ class RouteServiceProvider extends ServiceProvider
 
     protected function loadRoutes(RouterInterface $router): void
     {
-        $routesFile = $this->app->basePath('routes/web.php');
-        if (file_exists($routesFile)) {
-            require $routesFile;
+        $webFile = $this->app->basePath('routes/web.php');
+        if (file_exists($webFile)) {
+            require $webFile;
+        }
+
+        $apiFile = $this->app->basePath('routes/api.php');
+        if (file_exists($apiFile)) {
+            require $apiFile;
         }
     }
 }
