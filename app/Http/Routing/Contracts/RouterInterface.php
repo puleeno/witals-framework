@@ -15,5 +15,6 @@ interface RouterInterface
     public function dispatch(Request $request): mixed;
     public function setWordPressFallback(callable $fallback): void;
     public function setHookFallback(callable $hook): void;
+    public function loadRoutesFrom(string $path): void;
     public function getRoutes(): array;
 }

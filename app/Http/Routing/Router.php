@@ -65,6 +65,18 @@ class Router implements RouterInterface
         $this->hookFallback = $hook;
     }
 
+    public function loadRoutesFrom(string $path): void
+    {
+        if (file_exists($path)) {
+            $router = $this;
+            require $path;
+            
+            $this->logger->info("Router: Loaded external routes from '{path}'", [
+                'path' => $path
+            ]);
+        }
+    }
+
     public function dispatch(Request $request): mixed
     {
         $path = '/' . ltrim($request->path(), '/');
