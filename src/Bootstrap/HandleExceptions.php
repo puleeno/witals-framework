@@ -34,9 +34,28 @@ class HandleExceptions
 
         ini_set('error_log', $app->getErrorLogPath());
 
-        if (!$app->isLongRunning()) {
+        $debug = $this->isDebug($app);
+
+        if ($debug) {
+            ini_set('display_errors', '1');
+            ini_set('display_startup_errors', '1');
+        } elseif (!$app->isLongRunning()) {
             ini_set('display_errors', '0');
         }
+    }
+
+    private function isDebug(Application $app): bool
+    {
+        // Check env var first (quick, no config loading needed)
+        if (getenv('PW_DEBUG') === '1' || getenv('PW_DEBUG') === 'true') {
+            return true;
+        }
+
+        if (getenv('APP_DEBUG') === '1' || getenv('APP_DEBUG') === 'true') {
+            return true;
+        }
+
+        return false;
     }
 
     /**
