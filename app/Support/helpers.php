@@ -113,9 +113,18 @@ if (!function_exists('trans')) {
 if (!function_exists('__')) {
     /**
      * Translate the given message (alias for trans).
+     * Supports both:
+     *   Witals: __($key, $replace, $locale)
+     *   WordPress: __($text, $domain)
      */
-    function __(string $key, array $replace = [], ?string $locale = null)
+    function __(string $key, array|string $replace = [], ?string $locale = null)
     {
+        if (is_string($replace)) {
+            // WordPress-style: __($text, $domain)
+            // $replace is actually the text domain.
+            // Fall back to $key (no translation in non-WP context).
+            return $key;
+        }
         return trans($key, $replace, $locale);
     }
 }
