@@ -37,6 +37,11 @@ class Container implements ContainerContract
     protected static array $reflectionCache = [];
 
     /**
+     * The container's compiled dependency cache.
+     */
+    protected static array $dependencyCache = [];
+
+    /**
      * The stack of concretes currently being built.
      */
     protected array $buildStack = [];
@@ -159,7 +164,35 @@ class Container implements ContainerContract
     public function call(callable $callback, array $parameters = []): mixed
     {
         $reflection = $this->getCallReflection($callback);
-        $dependencies = $reflection->getParameters();
+        $cacheKey = $this->getCallableCacheKey($callback);
+
+        if ($cacheKey !== null && isset(self::$dependencyCache[$cacheKey])) {
+            $dependencies = self::$dependencyCache[$cacheKey];
+        } else {
+            $declaringClass = $reflection instanceof \ReflectionMethod
+                ? $reflection->getDeclaringClass()->getName()
+                : 'Closure/Function';
+
+            $dependencies = [];
+            foreach ($reflection->getParameters() as $dependency) {
+                $type = $dependency->getType();
+                $isBuiltin = !$type instanceof ReflectionNamedType || $type->isBuiltin();
+
+                $dependencies[] = [
+                    'name' => $dependency->name,
+                    'isBuiltin' => $isBuiltin,
+                    'className' => !$isBuiltin ? $type->getName() : null,
+                    'hasDefault' => $dependency->isDefaultValueAvailable(),
+                    'defaultValue' => $dependency->isDefaultValueAvailable() ? $dependency->getDefaultValue() : null,
+                    'declaringClass' => $declaringClass,
+                ];
+            }
+
+            if ($cacheKey !== null) {
+                self::$dependencyCache[$cacheKey] = $dependencies;
+            }
+        }
+
         $instances = $this->resolveDependencies($dependencies, $parameters);
 
         return call_user_func_array($callback, $instances);
@@ -274,7 +307,26 @@ class Container implements ContainerContract
                 return new $concrete;
             }
 
-            $dependencies = $constructor->getParameters();
+            if (isset(self::$dependencyCache[$concrete])) {
+                $dependencies = self::$dependencyCache[$concrete];
+            } else {
+                $dependencies = [];
+                foreach ($constructor->getParameters() as $dependency) {
+                    $type = $dependency->getType();
+                    $isBuiltin = !$type instanceof ReflectionNamedType || $type->isBuiltin();
+                    
+                    $dependencies[] = [
+                        'name' => $dependency->name,
+                        'isBuiltin' => $isBuiltin,
+                        'className' => !$isBuiltin ? $type->getName() : null,
+                        'hasDefault' => $dependency->isDefaultValueAvailable(),
+                        'defaultValue' => $dependency->isDefaultValueAvailable() ? $dependency->getDefaultValue() : null,
+                        'declaringClass' => ($declaringClass = $dependency->getDeclaringClass()) ? $declaringClass->getName() : 'Closure/Function',
+                    ];
+                }
+                self::$dependencyCache[$concrete] = $dependencies;
+            }
+
             $instances = $this->resolveDependencies($dependencies, $parameters);
 
             array_pop($this->buildStack);
@@ -296,9 +348,11 @@ class Container implements ContainerContract
         $results = [];
 
         foreach ($dependencies as $index => $dependency) {
+            $name = is_array($dependency) ? $dependency['name'] : $dependency->name;
+
             // 1. If parameter is manually provided by name or position.
-            if (array_key_exists($dependency->name, $parameters)) {
-                $results[] = $parameters[$dependency->name];
+            if (array_key_exists($name, $parameters)) {
+                $results[] = $parameters[$name];
                 continue;
             }
 
@@ -307,27 +361,38 @@ class Container implements ContainerContract
                 continue;
             }
 
-            // 2. Reflect on type.
-            $type = $dependency->getType();
+            if (is_array($dependency)) {
+                $isBuiltin = $dependency['isBuiltin'];
+                $hasDefault = $dependency['hasDefault'];
+                $defaultValue = $dependency['defaultValue'];
+                $className = $dependency['className'];
+                $declaringClass = $dependency['declaringClass'];
+            } else {
+                // 2. Reflect on type (for non-cached like call()).
+                $type = $dependency->getType();
+                $isBuiltin = !$type instanceof ReflectionNamedType || $type->isBuiltin();
+                $hasDefault = $dependency->isDefaultValueAvailable();
+                $defaultValue = $hasDefault ? $dependency->getDefaultValue() : null;
+                $className = !$isBuiltin ? $type->getName() : null;
+                $declaringClass = ($c = $dependency->getDeclaringClass()) ? $c->getName() : 'Closure/Function';
+            }
 
             // If missing type or built-in (string, int), check for default value.
-            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-                if ($dependency->isDefaultValueAvailable()) {
-                    $results[] = $dependency->getDefaultValue();
+            if ($isBuiltin) {
+                if ($hasDefault) {
+                    $results[] = $defaultValue;
                     continue;
                 }
 
-                $declaringClass = $dependency->getDeclaringClass();
-                $name = $declaringClass ? $declaringClass->getName() : 'Closure/Function';
-                throw new ContainerException("Unresolvable dependency [{$dependency->name}] in {$name}");
+                throw new ContainerException("Unresolvable dependency [{$name}] in {$declaringClass}");
             }
 
             // 3. Resolve the class dependency.
             try {
-                $results[] = $this->make($type->getName());
+                $results[] = $this->make($className);
             } catch (\Exception $e) {
-                if ($dependency->isDefaultValueAvailable()) {
-                    $results[] = $dependency->getDefaultValue();
+                if ($hasDefault) {
+                    $results[] = $defaultValue;
                     continue;
                 }
                 throw $e;

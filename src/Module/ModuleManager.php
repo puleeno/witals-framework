@@ -117,46 +117,34 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             return false;
         }
 
-        $cacheMtime = filemtime($cacheFile);
-
-        foreach ($this->modulePaths as $modulesPath) {
-            if (!is_dir($modulesPath)) {
-                continue;
-            }
-
-            $dirMtime = filemtime($modulesPath);
-            if ($dirMtime > $cacheMtime) {
-                return false;
-            }
-
-            foreach (scandir($modulesPath) as $entry) {
-                if ($entry === '.' || $entry === '..') {
-                    continue;
-                }
-
-                $modulePath = $modulesPath . '/' . $entry;
-                if (!is_dir($modulePath)) {
-                    continue;
-                }
-
-                $manifestPath = $modulePath . '/manifest.json';
-                if (file_exists($manifestPath) && filemtime($manifestPath) > $cacheMtime) {
-                    return false;
-                }
-
-                $manifestPathLegacy = $modulePath . '/module.json';
-                if (file_exists($manifestPathLegacy) && filemtime($manifestPathLegacy) > $cacheMtime) {
-                    return false;
-                }
-            }
-        }
-
         $cached = require $cacheFile;
 
         if (!is_array($cached)) {
             return false;
         }
 
+        // Support both new format (with 'metadata' key) and legacy flat format
+        if (isset($cached['metadata'])) {
+            $this->metadataMap = $cached['metadata'];
+            self::$moduleClassmap = $cached['classmap'] ?? [];
+
+            // In non-production, quick sanity: verify module path directories still exist (O(K), not O(M))
+            $isProduction = $this->app->config('app.env', 'production') === 'production'
+                && !$this->app->config('app.debug', false);
+
+            if (!$isProduction) {
+                foreach ($cached['_paths'] ?? [] as $path) {
+                    if (!is_dir($path)) {
+                        self::$moduleClassmap = [];
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        // Legacy flat format — no classmap, no checksum
         $this->metadataMap = $cached;
 
         return true;
@@ -170,8 +158,57 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             mkdir($cacheDir, 0775, true);
         }
 
-        $content = '<?php return ' . var_export($this->metadataMap, true) . ';' . "\n";
+        $data = [
+            'metadata' => $this->metadataMap,
+            '_paths' => $this->modulePaths,
+            'classmap' => $this->buildClassMap(),
+        ];
+
+        $content = '<?php return ' . var_export($data, true) . ';' . "\n";
         file_put_contents($this->discoveryCachePath(), $content, LOCK_EX);
+    }
+
+    protected function buildClassMap(): array
+    {
+        $classmap = [];
+
+        foreach ($this->metadataMap as $meta) {
+            $autoload = $meta['autoload']['psr-4'] ?? [];
+            $basePath = $meta['_path'] ?? '';
+
+            foreach ($autoload as $ns => $dir) {
+                $ns = rtrim($ns, '\\') . '\\';
+                $fullDir = $basePath . '/' . ltrim($dir, '/');
+
+                if (!is_dir($fullDir)) {
+                    continue;
+                }
+
+                $this->scanDirForClassmap($ns, $fullDir, $classmap);
+            }
+        }
+
+        return $classmap;
+    }
+
+    protected function scanDirForClassmap(string $namespace, string $dir, array &$classmap): void
+    {
+        $items = scandir($dir);
+
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $path = $dir . '/' . $item;
+
+            if (is_dir($path)) {
+                $this->scanDirForClassmap($namespace . $item . '\\', $path, $classmap);
+            } elseif (str_ends_with($item, '.php')) {
+                $className = $namespace . pathinfo($item, PATHINFO_FILENAME);
+                $classmap[$className] = $path;
+            }
+        }
     }
 
     public function clearDiscoveryCache(): void
@@ -535,6 +572,8 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
     protected static ?array $moduleAutoloadMap = null;
 
+    protected static array $moduleClassmap = [];
+
     protected static bool $autoloadersRegistered = false;
 
     protected function registerModuleAutoloaders(): void
@@ -554,7 +593,10 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             foreach ($autoload as $ns => $dir) {
                 $ns = rtrim($ns, '\\') . '\\';
                 $fullPath = $basePath . '/' . ltrim($dir, '/');
-                $prefixes[$ns] = $fullPath;
+                if (!isset($prefixes[$ns])) {
+                    $prefixes[$ns] = [];
+                }
+                $prefixes[$ns][] = rtrim($fullPath, '/');
             }
         }
 
@@ -565,13 +607,25 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         self::$moduleAutoloadMap = $prefixes;
 
         spl_autoload_register(function (string $class): void {
-            foreach (self::$moduleAutoloadMap as $ns => $baseDir) {
-                if (str_starts_with($class, $ns)) {
-                    $relative = substr($class, strlen($ns));
-                    $file = $baseDir . str_replace('\\', '/', $relative) . '.php';
-                    if (file_exists($file)) {
-                        require $file;
-                        return;
+            // 1. O(1) classmap lookup (from discovery cache)
+            if (isset(self::$moduleClassmap[$class])) {
+                require self::$moduleClassmap[$class];
+                return;
+            }
+
+            // 2. Fallback: PSR-4 prefix search (for newly added classes not in cache)
+            foreach (self::$moduleAutoloadMap as $prefix => $dirs) {
+                if (str_starts_with($class, $prefix)) {
+                    $relativeClass = substr($class, strlen($prefix));
+                    $fileRelative = str_replace('\\', '/', $relativeClass) . '.php';
+
+                    foreach ($dirs as $dir) {
+                        $file = $dir . '/' . $fileRelative;
+
+                        if (file_exists($file)) {
+                            require $file;
+                            return;
+                        }
                     }
                 }
             }
