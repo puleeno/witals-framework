@@ -23,12 +23,21 @@ class RouteRegistry implements RouteRegistryInterface
 
     protected const PARAM_REGEX = '/\{(\w+)(\??)(?::((?:[^{}]|\{[^{}]*\})+))?\}/';
 
+    protected string $cachePath = '';
+    protected bool $cacheEnabled = false;
+
     public function __construct(
         protected Application $app,
     ) {
         for ($i = 0; $i <= self::PRIORITY_FALLBACK; $i++) {
             $this->routes[$i] = [];
         }
+    }
+
+    public function enableCache(string $path): void
+    {
+        $this->cachePath = $path;
+        $this->cacheEnabled = true;
     }
 
     public function addMiddleware(string $middleware): void
@@ -39,20 +48,12 @@ class RouteRegistry implements RouteRegistryInterface
     public function addMiddlewareFor(string $middleware, array|string $only, ?array $except = null): void
     {
         $entry = ['middleware' => $middleware];
-
-        if (is_string($only)) {
-            $only = [$only];
-        }
-        if ($only !== []) {
-            $entry['only'] = $only;
-        }
+        if (is_string($only)) $only = [$only];
+        if ($only !== []) $entry['only'] = $only;
         if ($except !== null) {
-            if (is_string($except)) {
-                $except = [$except];
-            }
+            if (is_string($except)) $except = [$except];
             $entry['except'] = $except;
         }
-
         $this->middleware[] = $entry;
     }
 
@@ -91,6 +92,7 @@ class RouteRegistry implements RouteRegistryInterface
             'pattern' => null,
             'params' => $this->parseParams($path),
             'static' => !str_contains($path, '{'),
+            'priority' => $priority,
         ];
 
         $this->routes[$priority][] = $entry;
@@ -138,10 +140,27 @@ class RouteRegistry implements RouteRegistryInterface
                     continue;
                 }
                 if (preg_match($group['regex'], $path, $matches)) {
-                    return $this->buildMatch(
-                        $group['route'],
-                        $this->extractParams($group['paramNames'], $matches)
-                    );
+                    if (isset($group['route'])) {
+                        return $this->buildMatch(
+                            $group['route'],
+                            $this->extractParams($group['paramNames'], $matches)
+                        );
+                    }
+                    foreach ($group['branches'] as $branch) {
+                        $match = true;
+                        foreach ($branch['paramNames'] as $name) {
+                            if (!isset($matches[$name]) || $matches[$name] === '') {
+                                $match = false;
+                                break;
+                            }
+                        }
+                        if ($match) {
+                            return $this->buildMatch(
+                                $branch['route'],
+                                $this->extractParams($branch['paramNames'], $matches)
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -170,20 +189,18 @@ class RouteRegistry implements RouteRegistryInterface
         return $this->runMiddlewarePipeline($request, $matchedPath, $this->middleware, $destination);
     }
 
-    protected function runMiddlewarePipeline(Request $request, string $path, array $pipeline, callable $destination): Response
+    protected function runMiddlewarePipeline(Request $request, string $path, array $pipeline, callable $destination, int $index = 0): Response
     {
-        $middleware = array_shift($pipeline);
+        $middleware = $pipeline[$index] ?? null;
 
         if ($middleware === null) {
             return $destination($request);
         }
 
-        // Normalize — string shorthand means global middleware
         if (is_string($middleware)) {
             $middleware = ['middleware' => $middleware];
         }
 
-        // Lazy-load: skip middleware that doesn't match this request path
         if (isset($middleware['only'])) {
             $matches = false;
             foreach ((array) $middleware['only'] as $pattern) {
@@ -193,20 +210,20 @@ class RouteRegistry implements RouteRegistryInterface
                 }
             }
             if (!$matches) {
-                return $this->runMiddlewarePipeline($request, $path, $pipeline, $destination);
+                return $this->runMiddlewarePipeline($request, $path, $pipeline, $destination, $index + 1);
             }
         }
 
         if (isset($middleware['except'])) {
             foreach ((array) $middleware['except'] as $pattern) {
                 if (str_starts_with($path, $pattern)) {
-                    return $this->runMiddlewarePipeline($request, $path, $pipeline, $destination);
+                    return $this->runMiddlewarePipeline($request, $path, $pipeline, $destination, $index + 1);
                 }
             }
         }
 
-        $next = function (Request $nextRequest) use ($path, $pipeline, $destination) {
-            return $this->runMiddlewarePipeline($nextRequest, $path, $pipeline, $destination);
+        $next = function (Request $nextRequest) use ($path, $pipeline, $destination, $index) {
+            return $this->runMiddlewarePipeline($nextRequest, $path, $pipeline, $destination, $index + 1);
         };
 
         if (isset($middleware['middleware'])) {
@@ -308,6 +325,11 @@ class RouteRegistry implements RouteRegistryInterface
             return;
         }
 
+        if ($this->cacheEnabled && $this->loadCache()) {
+            $this->indexed = true;
+            return;
+        }
+
         $this->staticIndex = [];
         $this->dynamicIndex = [];
 
@@ -329,10 +351,92 @@ class RouteRegistry implements RouteRegistryInterface
 
             foreach ($this->dynamicIndex[$p] ?? [] as $m => &$groups) {
                 usort($groups, fn($a, $b) => strlen($b['prefix']) <=> strlen($a['prefix']));
+
+                $merged = [];
+                foreach ($groups as $g) {
+                    $key = $g['prefix'] . "\0" . $this->countCaptureGroups($g['regex']);
+                    $merged[$key][] = $g;
+                }
+                $groups = [];
+                foreach ($merged as $entries) {
+                    if (count($entries) === 1) {
+                        $groups[] = $entries[0];
+                    } else {
+                        $sharedPrefix = $entries[0]['prefix'];
+                        $branches = [];
+                        $branchList = [];
+                        foreach ($entries as $e) {
+                            $fullBody = substr($e['regex'], 2, -3);
+                            $branchBody = substr($fullBody, strlen($sharedPrefix));
+                            $branches[] = $branchBody;
+                            $branchList[] = [
+                                'route' => $e['route'],
+                                'paramNames' => $e['paramNames'],
+                            ];
+                        }
+                        $combined = '#^' . preg_quote($sharedPrefix, '#') . '(?|' . implode('|', $branches) . ')$#i';
+                        $groups[] = [
+                            'prefix' => $sharedPrefix,
+                            'regex' => $combined,
+                            'branches' => $branchList,
+                        ];
+                    }
+                }
             }
         }
 
         $this->indexed = true;
+
+        if ($this->cacheEnabled) {
+            $this->saveCache();
+        }
+    }
+
+    protected function saveCache(): void
+    {
+        for ($p = 0; $p <= self::PRIORITY_FALLBACK; $p++) {
+            foreach ($this->routes[$p] ?? [] as $route) {
+                if ($route['action'] instanceof \Closure) {
+                    return;
+                }
+            }
+        }
+
+        $data = var_export([
+            'staticIndex' => $this->staticIndex,
+            'dynamicIndex' => $this->dynamicIndex,
+        ], true);
+
+        $dir = dirname($this->cachePath);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+
+        file_put_contents($this->cachePath, '<?php return ' . $data . ';' . PHP_EOL, LOCK_EX);
+    }
+
+    protected function loadCache(): bool
+    {
+        if (!file_exists($this->cachePath)) {
+            return false;
+        }
+
+        $data = include $this->cachePath;
+
+        if (!is_array($data) || !isset($data['staticIndex'], $data['dynamicIndex'])) {
+            return false;
+        }
+
+        $this->staticIndex = $data['staticIndex'];
+        $this->dynamicIndex = $data['dynamicIndex'];
+
+        return true;
+    }
+
+    protected function countCaptureGroups(string $regex): int
+    {
+        preg_match_all('/\((?!\?)/', $regex, $m);
+        return count($m[0]);
     }
 
     protected function extractPrefix(string $path): string
@@ -400,20 +504,10 @@ class RouteRegistry implements RouteRegistryInterface
         return [
             'action' => $route['action'],
             'params' => $params,
-            'priority' => $this->findPriority($route),
+            'priority' => $route['priority'],
             'options' => $route['options'],
             'name' => $route['name'] ?? null,
         ];
-    }
-
-    protected function findPriority(array $route): int
-    {
-        for ($p = 0; $p <= self::PRIORITY_FALLBACK; $p++) {
-            if (isset($this->routes[$p]) && in_array($route, $this->routes[$p], true)) {
-                return $p;
-            }
-        }
-        return self::PRIORITY_NATIVE;
     }
 
     protected function toResponse(mixed $result): Response

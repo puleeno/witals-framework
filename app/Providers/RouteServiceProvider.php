@@ -17,7 +17,12 @@ class RouteServiceProvider extends ServiceProvider
     {
         // RouteRegistry — single source of truth for all routes
         $this->app->singleton(RouteRegistryInterface::class, function ($app) {
-            return new RouteRegistry($app);
+            $registry = new RouteRegistry($app);
+            if (!$app->isLongRunning()) {
+                $cachePath = $app->basePath('storage/framework/cache/routes.php');
+                $registry->enableCache($cachePath);
+            }
+            return $registry;
         });
 
         // Router — facade over RouteRegistry with fallback chain
