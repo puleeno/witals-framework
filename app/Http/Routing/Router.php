@@ -17,6 +17,7 @@ class Router implements RouterInterface
     protected \Psr\Log\LoggerInterface $logger;
     protected ?\Closure $wordPressFallback = null;
     protected ?\Closure $hookFallback = null;
+    protected array $prefixStack = [];
 
     public function __construct(Application $app, \Psr\Log\LoggerInterface $logger)
     {
@@ -44,15 +45,25 @@ class Router implements RouterInterface
         $this->addRoute('DELETE', $path, $action);
     }
 
+    public function group(array $attributes, \Closure $callback): void
+    {
+        $prefix = $attributes['prefix'] ?? '';
+        $this->prefixStack[] = $prefix;
+        $callback($this);
+        array_pop($this->prefixStack);
+    }
+
     protected function addRoute(string $method, string $path, $action): void
     {
+        $prefix = implode('', $this->prefixStack);
+        $fullPath = $prefix . '/' . ltrim($path, '/');
         $this->registry->addRoute(
             method: $method,
-            path: $path,
+            path: $fullPath,
             action: $action,
             priority: RouteRegistryInterface::PRIORITY_NATIVE,
         );
-        $this->logger->debug("Router: Registered route {method} {path}", ['method' => $method, 'path' => $path]);
+        $this->logger->debug("Router: Registered route {method} {path}", ['method' => $method, 'path' => $fullPath]);
     }
 
     public function setWordPressFallback(callable $fallback): void
