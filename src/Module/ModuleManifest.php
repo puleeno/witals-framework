@@ -120,6 +120,43 @@ class ModuleManifest
             $errors[] = "Invalid type: {$this->data['type']}. Must be: support, route, theme";
         }
 
+        // Validate route handlers (class::method syntax)
+        $routes = $this->data['routes'] ?? [];
+        foreach ($routes as $i => $route) {
+            if (!isset($route['method'], $route['path'])) {
+                $errors[] = "Route #{$i} is missing 'method' or 'path'";
+                continue;
+            }
+
+            if (!in_array(strtoupper($route['method']), ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], true)) {
+                $errors[] = "Route #{$i}: invalid HTTP method '{$route['method']}'";
+            }
+
+            if (!isset($route['handler'])) {
+                $errors[] = "Route #{$i} ({$route['method']} {$route['path']}): missing handler";
+                continue;
+            }
+
+            $handler = $route['handler'];
+            if (is_string($handler) && str_contains($handler, '@')) {
+                [$class, $method] = explode('@', $handler, 2);
+                if (!class_exists($class)) {
+                    $errors[] = "Route #{$i} ({$route['method']} {$route['path']}): handler class '{$class}' not found";
+                } elseif (!method_exists($class, $method)) {
+                    $errors[] = "Route #{$i} ({$route['method']} {$route['path']}): handler method '{$method}' not found on '{$class}'";
+                }
+            } elseif (is_array($handler) && count($handler) === 2) {
+                [$class, $method] = $handler;
+                if (!class_exists($class)) {
+                    $errors[] = "Route #{$i} ({$route['method']} {$route['path']}): handler class '{$class}' not found";
+                } elseif (!method_exists($class, $method)) {
+                    $errors[] = "Route #{$i} ({$route['method']} {$route['path']}): handler method '{$method}' not found on '{$class}'";
+                }
+            } else {
+                $errors[] = "Route #{$i} ({$route['method']} {$route['path']}): invalid handler format";
+            }
+        }
+
         return $errors;
     }
 

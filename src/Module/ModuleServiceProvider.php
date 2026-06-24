@@ -11,8 +11,20 @@ class ModuleServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(ModuleDiscoveryService::class, function ($app) {
+            return new ModuleDiscoveryService($app);
+        });
+
+        $this->app->singleton(ModuleRouter::class, function ($app) {
+            return new ModuleRouter($app, $app->make(ModuleDiscoveryService::class));
+        });
+
         $this->app->singleton(ModuleManager::class, function ($app) {
-            return new ModuleManager($app);
+            $discovery = $app->make(ModuleDiscoveryService::class);
+            $router = $app->make(ModuleRouter::class);
+            $manager = new ModuleManager($app, $discovery, $router, $app->make(\Psr\Log\LoggerInterface::class));
+            $router->setModuleLoader(fn(string $name) => $manager->load($name));
+            return $manager;
         });
 
         $this->app->singleton(Hook::class, function () {

@@ -8,11 +8,23 @@ use PHPUnit\Framework\TestCase;
 use Witals\Framework\Application;
 use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\Module\ModuleManager;
+use Witals\Framework\Module\ModuleDiscoveryService;
+use Witals\Framework\Module\ModuleRouter;
 use Witals\Framework\Module\Hook;
 
 class HelpersTest extends TestCase
 {
     protected string $tmpDir;
+
+    protected function createManager(Application $app, string $dir): ModuleManager
+    {
+        $discovery = new ModuleDiscoveryService($app, $dir);
+        $router = new ModuleRouter($app, $discovery);
+        $logger = new LoggerStub();
+        $manager = new ModuleManager($app, $discovery, $router, $logger);
+        $router->setModuleLoader(fn(string $name) => $manager->load($name));
+        return $manager;
+    }
 
     protected function setUp(): void
     {
@@ -32,7 +44,7 @@ class HelpersTest extends TestCase
     public function test_module_helper_returns_manager(): void
     {
         $app = new ApplicationStub($this->tmpDir, RuntimeType::TRADITIONAL);
-        $app->instance(ModuleManager::class, new ModuleManager($app, $this->tmpDir));
+        $app->instance(ModuleManager::class, $this->createManager($app, $this->tmpDir));
 
         $manager = module();
         $this->assertInstanceOf(ModuleManager::class, $manager);
@@ -41,7 +53,7 @@ class HelpersTest extends TestCase
     public function test_module_helper_with_name(): void
     {
         $app = new ApplicationStub($this->tmpDir, RuntimeType::TRADITIONAL);
-        $manager = new ModuleManager($app, $this->tmpDir);
+        $manager = $this->createManager($app, $this->tmpDir);
         $app->instance(ModuleManager::class, $manager);
 
         $result = module('nonexistent');

@@ -24,6 +24,19 @@ class ApplicationStub extends Application
     }
 }
 
+class LoggerStub implements \Psr\Log\LoggerInterface
+{
+    public function emergency($message, array $context = []): void {}
+    public function alert($message, array $context = []): void {}
+    public function critical($message, array $context = []): void {}
+    public function error($message, array $context = []): void {}
+    public function warning($message, array $context = []): void {}
+    public function notice($message, array $context = []): void {}
+    public function info($message, array $context = []): void {}
+    public function debug($message, array $context = []): void {}
+    public function log($level, $message, array $context = []): void {}
+}
+
 class ModuleManagerTest extends TestCase
 {
     protected Application $app;
@@ -32,6 +45,16 @@ class ModuleManagerTest extends TestCase
 
     protected string $modulesDir;
 
+    protected function createManager(string $modulesDir): ModuleManager
+    {
+        $discovery = new \Witals\Framework\Module\ModuleDiscoveryService($this->app, $modulesDir);
+        $router = new \Witals\Framework\Module\ModuleRouter($this->app, $discovery);
+        $logger = new LoggerStub();
+        $manager = new ModuleManager($this->app, $discovery, $router, $logger);
+        $router->setModuleLoader(fn(string $name) => $manager->load($name));
+        return $manager;
+    }
+
     protected function setUp(): void
     {
         $this->tmpDir = sys_get_temp_dir() . '/witals_mm_test_' . uniqid();
@@ -39,7 +62,7 @@ class ModuleManagerTest extends TestCase
         mkdir($this->modulesDir, 0777, true);
 
         $this->app = new ApplicationStub($this->tmpDir, RuntimeType::TRADITIONAL);
-        $this->app->instance(ModuleManager::class, new ModuleManager($this->app, $this->modulesDir));
+        $this->app->instance(ModuleManager::class, $this->createManager($this->modulesDir));
     }
 
     protected function tearDown(): void
@@ -176,8 +199,9 @@ class ModuleManagerTest extends TestCase
         $manager = $this->app->make(ModuleManager::class);
         $index = $manager->buildRouteIndex();
 
-        $this->assertCount(1, $index);
-        $this->assertSame('route_mod', $index[0]['module']);
+        $this->assertArrayHasKey('GET', $index);
+        $this->assertCount(1, $index['GET']);
+        $this->assertSame('route_mod', $index['GET'][0]['module']);
     }
 
     public function test_build_route_index_skips_route_without_required_fields(): void
@@ -195,7 +219,8 @@ class ModuleManagerTest extends TestCase
         $manager = $this->app->make(ModuleManager::class);
         $index = $manager->buildRouteIndex();
 
-        $this->assertCount(1, $index);
+        $this->assertArrayHasKey('GET', $index);
+        $this->assertCount(1, $index['GET']);
     }
 
     public function test_match_route(): void
@@ -382,7 +407,8 @@ class ModuleManagerTest extends TestCase
         $manager = $this->app->make(ModuleManager::class);
         $index = $manager->buildRouteIndex();
 
-        $this->assertCount(3, $index);
-        $this->assertStringContainsString('comments', $index[0]['pattern']);
+        $this->assertArrayHasKey('GET', $index);
+        $this->assertCount(3, $index['GET']);
+        $this->assertStringContainsString('comments', $index['GET'][0]['pattern']);
     }
 }

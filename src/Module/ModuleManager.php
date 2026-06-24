@@ -13,10 +13,6 @@ use App\Http\Routing\Contracts\RouteRegistryInterface;
 
 class ModuleManager implements Contracts\ModuleManagerInterface
 {
-    protected array $metadataMap = [];
-
-    protected array $routeIndex = [];
-
     protected array $loaded = [];
 
     protected array $instances = [];
@@ -24,415 +20,58 @@ class ModuleManager implements Contracts\ModuleManagerInterface
     /** Modules currently being loaded (for cycle detection) */
     protected array $loading = [];
 
-    protected bool $discovered = false;
+    protected static ?array $moduleAutoloadMap = null;
 
-    protected array $modulePaths = [];
+    protected static array $moduleClassmap = [];
+
+    protected static bool $autoloadersRegistered = false;
 
     public function __construct(
         protected Application $app,
-        protected string $modulesPath = '',
-    ) {
-        if ($modulesPath === '') {
-            $this->modulesPath = $app->basePath('modules');
-        }
-
-        $this->modulePaths = [
-            $this->modulesPath,
-            $app->basePath('framework/witals/modules'),
-            $app->basePath('framework/presto/modules'),
-        ];
-    }
+        protected ModuleDiscoveryService $discoveryService,
+        protected ModuleRouter $router,
+        protected LoggerInterface $logger,
+    ) {}
 
     public function addModulePath(string $path): void
     {
-        $this->modulePaths[] = $path;
+        $this->discoveryService->addModulePath($path);
     }
 
     public function discover(): void
     {
-        if ($this->discovered) {
-            return;
-        }
-
-        $this->discovered = true;
-
-        if ($this->loadDiscoveryCache()) {
-            return;
-        }
-
-        foreach ($this->modulePaths as $modulesPath) {
-            if (!is_dir($modulesPath)) {
-                continue;
-            }
-
-            foreach (scandir($modulesPath) as $entry) {
-                if ($entry === '.' || $entry === '..') {
-                    continue;
-                }
-
-                $modulePath = $modulesPath . '/' . $entry;
-
-                if (!is_dir($modulePath)) {
-                    continue;
-                }
-
-                $manifest = new ModuleManifest($modulePath);
-
-                if (!$manifest->valid()) {
-                    continue;
-                }
-
-                $name = $manifest->name();
-
-                if (isset($this->metadataMap[$name])) {
-                    continue;
-                }
-
-                $metadata = $manifest->toArray();
-
-                $configKey = "modules.enabled.{$name}";
-                if ($this->app->config($configKey) !== null) {
-                    $metadata['enabled'] = (bool) $this->app->config($configKey);
-                }
-
-                $this->metadataMap[$name] = $metadata;
-
-                $this->discoverFunctions($name, $metadata);
-            }
-        }
-
-        $this->saveDiscoveryCache();
+        $this->discoveryService->discover();
     }
 
-    protected function discoveryCachePath(): string
+    public function all(): array
     {
-        return $this->app->basePath('storage/framework/cache/modules-discovery.php');
-    }
-
-    protected function loadDiscoveryCache(): bool
-    {
-        $cacheFile = $this->discoveryCachePath();
-
-        if (!file_exists($cacheFile)) {
-            return false;
-        }
-
-        $cached = require $cacheFile;
-
-        if (!is_array($cached)) {
-            return false;
-        }
-
-        // Support both new format (with 'metadata' key) and legacy flat format
-        if (isset($cached['metadata'])) {
-            $this->metadataMap = $cached['metadata'];
-            self::$moduleClassmap = $cached['classmap'] ?? [];
-
-            // In non-production, quick sanity: verify module path directories still exist (O(K), not O(M))
-            $isProduction = $this->app->config('app.env', 'production') === 'production'
-                && !$this->app->config('app.debug', false);
-
-            if (!$isProduction) {
-                foreach ($cached['_paths'] ?? [] as $path) {
-                    if (!is_dir($path)) {
-                        self::$moduleClassmap = [];
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        // Legacy flat format — no classmap, no checksum
-        $this->metadataMap = $cached;
-
-        return true;
-    }
-
-    protected function saveDiscoveryCache(): void
-    {
-        $cacheDir = dirname($this->discoveryCachePath());
-
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0775, true);
-        }
-
-        $data = [
-            'metadata' => $this->metadataMap,
-            '_paths' => $this->modulePaths,
-            'classmap' => $this->buildClassMap(),
-        ];
-
-        $content = '<?php return ' . var_export($data, true) . ';' . "\n";
-        file_put_contents($this->discoveryCachePath(), $content, LOCK_EX);
-    }
-
-    protected function buildClassMap(): array
-    {
-        $classmap = [];
-
-        foreach ($this->metadataMap as $meta) {
-            $autoload = $meta['autoload']['psr-4'] ?? [];
-            $basePath = $meta['_path'] ?? '';
-
-            foreach ($autoload as $ns => $dir) {
-                $ns = rtrim($ns, '\\') . '\\';
-                $fullDir = $basePath . '/' . ltrim($dir, '/');
-
-                if (!is_dir($fullDir)) {
-                    continue;
-                }
-
-                $this->scanDirForClassmap($ns, $fullDir, $classmap);
-            }
-        }
-
-        return $classmap;
-    }
-
-    protected function scanDirForClassmap(string $namespace, string $dir, array &$classmap): void
-    {
-        $items = scandir($dir);
-
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-
-            $path = $dir . '/' . $item;
-
-            if (is_dir($path)) {
-                $this->scanDirForClassmap($namespace . $item . '\\', $path, $classmap);
-            } elseif (str_ends_with($item, '.php')) {
-                $className = $namespace . pathinfo($item, PATHINFO_FILENAME);
-                $classmap[$className] = $path;
-            }
-        }
+        $this->discover();
+        return $this->discoveryService->getMetadataMap();
     }
 
     public function clearDiscoveryCache(): void
     {
-        $cacheFile = $this->discoveryCachePath();
-
-        if (file_exists($cacheFile)) {
-            unlink($cacheFile);
-        }
-    }
-
-    protected function discoverFunctions(string $moduleName, array &$metadata): void
-    {
-        $raw = $metadata['functions'] ?? [];
-
-        $this->flattenFunctions($moduleName, $raw, $moduleName, $metadata);
-    }
-
-    protected function flattenFunctions(
-        string $moduleName,
-        array $functions,
-        string $prefix,
-        array &$moduleMeta,
-        array $parentChain = [],
-    ): void {
-        foreach ($functions as $fnName => $fnCfg) {
-            $fullFnName = $prefix . '.' . $fnName;
-            $chain = array_merge($parentChain, [$fnName]);
-
-            $fnType = $fnCfg['type'] ?? 'support';
-            $fnEnabled = $fnCfg['enabled'] ?? ($moduleMeta['enabled'] ?? true);
-            $fnPriority = $fnCfg['priority'] ?? ($moduleMeta['priority'] ?? 50);
-            $fnPrefix = $fnCfg['route_prefix'] ?? '';
-
-            $children = $fnCfg['functions'] ?? [];
-            unset($fnCfg['functions']);
-
-            $entry = $fnCfg;
-            $entry['name'] = $fullFnName;
-            $entry['type'] = $fnType;
-            $entry['enabled'] = $fnEnabled;
-            $entry['priority'] = $fnPriority;
-            $entry['_function'] = true;
-            $entry['_module'] = $moduleName;
-            $entry['_chain'] = $chain;
-            $entry['_path'] = $moduleMeta['_path'];
-            $entry['_parent'] = $parentChain !== [] ? $prefix : null;
-            $entry['route_prefix'] = $fnPrefix;
-            $entry['routes'] = $fnCfg['routes'] ?? [];
-
-            $this->metadataMap[$fullFnName] = $entry;
-
-            if ($children !== []) {
-                $this->flattenFunctions($moduleName, $children, $fullFnName, $moduleMeta, $chain);
-            }
-        }
+        $this->discoveryService->clearDiscoveryCache();
     }
 
     public function buildRouteIndex(): array
     {
-        if ($this->routeIndex !== []) {
-            return $this->routeIndex;
-        }
-
-        $this->discover();
-
-        $index = [];
-
-        foreach ($this->metadataMap as $name => $meta) {
-            if (!($meta['enabled'] ?? false)) {
-                continue;
-            }
-
-            $effectiveType = $meta['_type'] ?? $meta['type'] ?? 'support';
-            if ($effectiveType !== 'route' && !($meta['_function'] ?? false)) {
-                continue;
-            }
-
-            if (($meta['_function'] ?? false) && $meta['type'] !== 'route') {
-                continue;
-            }
-
-            $moduleName = $meta['_module'] ?? $name;
-            $moduleMeta = $this->metadataMap[$moduleName] ?? [];
-            $modulePrefix = $moduleMeta['route_prefix'] ?? '';
-
-            $fnPrefix = ($meta['_function'] ?? false) ? ($meta['route_prefix'] ?? '') : '';
-
-            $prefix = $modulePrefix;
-            if ($fnPrefix !== '') {
-                $prefix = $prefix !== '' ? $prefix . '/' . ltrim($fnPrefix, '/') : $fnPrefix;
-            }
-
-            $routePrefix = $prefix !== '' ? '/' . ltrim($prefix, '/') : '';
-
-            $routes = $meta['routes'] ?? [];
-
-            foreach ($routes as $route) {
-                if (!isset($route['method'], $route['path'], $route['handler'])) {
-                    continue;
-                }
-
-                $method = strtoupper($route['method']);
-                $path = $route['path'];
-
-                $fullPath = $routePrefix . '/' . ltrim($path, '/');
-                $pattern = $this->pathToRegex($fullPath);
-
-                $index[$method][] = [
-                    'method' => $method,
-                    'pattern' => $pattern,
-                    'module' => $moduleName,
-                    'function' => $meta['_function'] ?? false ? $name : null,
-                    'handler' => $route['handler'],
-                ];
-            }
-        }
-
-        // Sort each method group by pattern length (longest first = most specific)
-        foreach ($index as $method => &$entries) {
-            usort($entries, fn ($a, $b) => strlen($b['pattern']) <=> strlen($a['pattern']));
-        }
-        unset($entries);
-
-        $this->routeIndex = $index;
-
-        return $this->routeIndex;
+        return $this->router->buildRouteIndex();
     }
 
     public function matchRoute(string $method, string $path): ?string
     {
-        $index = $this->buildRouteIndex();
-        $method = strtoupper($method);
-
-        $entries = $index[$method] ?? [];
-
-        foreach ($entries as $entry) {
-            if (preg_match($entry['pattern'], $path)) {
-                return $entry['module'];
-            }
-        }
-
-        return null;
+        return $this->router->matchRoute($method, $path);
     }
 
     public function registerModuleRoutes(RouteRegistryInterface $registry): void
     {
-        $this->discover();
-
-        foreach ($this->metadataMap as $name => $meta) {
-            if (!($meta['enabled'] ?? false)) {
-                continue;
-            }
-
-            $routes = $meta['routes'] ?? [];
-            if ($routes === []) {
-                continue;
-            }
-
-            $modulePrefix = $meta['route_prefix'] ?? '';
-            $routePrefix = $modulePrefix !== '' ? '/' . ltrim($modulePrefix, '/') : '';
-
-            foreach ($routes as $route) {
-                if (!isset($route['method'], $route['path'], $route['handler'])) {
-                    continue;
-                }
-
-                $method = strtoupper($route['method']);
-                $path = $routePrefix . '/' . ltrim($route['path'], '/');
-                $handler = $route['handler'];
-
-                $registry->addRoute(
-                    method: $method,
-                    path: $path,
-                    action: $this->wrapModuleHandler($name, $handler),
-                    priority: RouteRegistryInterface::PRIORITY_MODULE,
-                    options: ['module' => $name, 'function' => $meta['_function'] ?? null],
-                );
-            }
-        }
-    }
-
-    protected function wrapModuleHandler(string $moduleName, array $handler): \Closure
-    {
-        return function (Request $request) use ($moduleName, $handler) {
-            $response = $this->executeHandler($handler, $request, []);
-            return $response;
-        };
+        $this->router->registerModuleRoutes($registry);
     }
 
     public function dispatch(Request $request): ?Response
     {
-        $method = strtoupper($request->method());
-        $path = '/' . ltrim($request->path(), '/');
-
-        $index = $this->buildRouteIndex();
-        $entries = $index[$method] ?? [];
-
-        foreach ($entries as $entry) {
-            if (!preg_match($entry['pattern'], $path, $matches)) {
-                continue;
-            }
-
-            $module = $this->load($entry['module']);
-
-            if ($module === null) {
-                continue;
-            }
-
-            if ($entry['function'] !== null) {
-                $parts = explode('.', $entry['function']);
-                $fn = $module->getFunction(implode('.', array_slice($parts, 1)));
-
-                if ($fn === null || !$fn->isEnabled()) {
-                    continue;
-                }
-            }
-
-            $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
-
-            return $this->executeHandler($entry['handler'], $request, $params);
-        }
-
-        return null;
+        return $this->router->dispatch($request);
     }
 
     public function load(string $name): ?ModuleInterface
@@ -447,12 +86,13 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         $isFunction = count($parts) > 1;
         $moduleName = $isFunction ? $parts[0] : $name;
 
-        if (!isset($this->metadataMap[$moduleName])) {
+        $metadata = $this->discoveryService->getModuleMetadata($moduleName);
+        if ($metadata === null) {
             return null;
         }
 
         if ($isFunction) {
-            $module = $this->loadModule($moduleName);
+            $module = $this->loadModule($moduleName, $metadata);
 
             if ($module === null) {
                 return null;
@@ -469,20 +109,15 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             return $module;
         }
 
-        return $this->loadModule($name);
+        return $this->loadModule($name, $metadata);
     }
 
-    protected function loadModule(string $name): ?Module
+    protected function loadModule(string $name, array $meta): ?Module
     {
         if (isset($this->instances[$name])) {
             return $this->instances[$name];
         }
 
-        if (!isset($this->metadataMap[$name])) {
-            return null;
-        }
-
-        // Circular dependency detection
         if (isset($this->loading[$name])) {
             $chain = implode(' -> ', array_keys($this->loading)) . ' -> ' . $name;
             throw \Witals\Framework\Module\Exceptions\ModuleException::circularDependency($name, $chain);
@@ -491,7 +126,6 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         $this->loading[$name] = true;
 
         try {
-            $meta = $this->metadataMap[$name];
             $path = $meta['_path'];
 
             $entryClass = $this->entryClassFromMeta($meta);
@@ -524,7 +158,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
             return $instance;
         } catch (\Throwable $e) {
             unset($this->loading[$name]);
-            $this->app->make(LoggerInterface::class)->error(
+            $this->logger->error(
                 'Failed to load module {name}: {message}',
                 ['name' => $name, 'message' => $e->getMessage(), 'exception' => $e]
             );
@@ -570,12 +204,6 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         $this->registerModuleAutoloaders();
     }
 
-    protected static ?array $moduleAutoloadMap = null;
-
-    protected static array $moduleClassmap = [];
-
-    protected static bool $autoloadersRegistered = false;
-
     protected function registerModuleAutoloaders(): void
     {
         if (self::$autoloadersRegistered) {
@@ -586,7 +214,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
 
         $prefixes = [];
 
-        foreach ($this->metadataMap as $meta) {
+        foreach ($this->discoveryService->getMetadataMap() as $meta) {
             $autoload = $meta['autoload']['psr-4'] ?? [];
             $basePath = $meta['_path'] ?? '';
 
@@ -607,13 +235,11 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         self::$moduleAutoloadMap = $prefixes;
 
         spl_autoload_register(function (string $class): void {
-            // 1. O(1) classmap lookup (from discovery cache)
             if (isset(self::$moduleClassmap[$class])) {
                 require self::$moduleClassmap[$class];
                 return;
             }
 
-            // 2. Fallback: PSR-4 prefix search (for newly added classes not in cache)
             foreach (self::$moduleAutoloadMap as $prefix => $dirs) {
                 if (str_starts_with($class, $prefix)) {
                     $relativeClass = substr($class, strlen($prefix));
@@ -644,7 +270,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
                 continue;
             }
 
-            if ($dep !== '' && !isset($this->metadataMap[$dep])) {
+            if ($dep !== '' && $this->discoveryService->getModuleMetadata($dep) === null) {
                 continue;
             }
 
@@ -676,13 +302,6 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         return isset($this->loaded[$name]);
     }
 
-    public function all(): array
-    {
-        $this->discover();
-
-        return $this->metadataMap;
-    }
-
     public function getLoaded(): array
     {
         return $this->instances;
@@ -692,7 +311,7 @@ class ModuleManager implements Contracts\ModuleManagerInterface
     {
         $modules = [];
 
-        foreach ($this->metadataMap as $name => $meta) {
+        foreach ($this->discoveryService->getMetadataMap() as $name => $meta) {
             if (!str_contains($name, '.')) {
                 $modules[$name] = $meta;
             }
@@ -710,37 +329,5 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         });
 
         return $modules;
-    }
-
-    protected function pathToRegex(string $path): string
-    {
-        $path = '/' . ltrim($path, '/');
-
-        $pattern = preg_replace('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', '(?P<$1>[^/]+)', $path);
-
-        return '#^' . $pattern . '$#';
-    }
-
-    protected function executeHandler(array $handler, Request $request, array $params): Response
-    {
-        [$class, $method] = $handler;
-
-        $instance = $this->app->make($class);
-
-        $result = $this->app->call([$instance, $method], $params + ['request' => $request]);
-
-        if ($result instanceof Response) {
-            return $result;
-        }
-
-        if (is_string($result)) {
-            return new Response($result, 200);
-        }
-
-        if (is_array($result)) {
-            return new Response(json_encode($result), 200, ['Content-Type' => 'application/json']);
-        }
-
-        return new Response('', 204);
     }
 }
