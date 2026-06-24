@@ -44,6 +44,15 @@ class Kernel implements KernelContract
             $this->app->make(\App\Foundation\Debug\DebugBar::class)->reset();
         }
 
+        // Per-request lifecycle: reset all stateful singletons registered in the container.
+        // Services that hold per-request state MUST implement ResettableInterface.
+        // Do NOT add project-specific class names here — register them via ResettableInterface instead.
+        foreach ($this->app->getInstances() as $instance) {
+            if ($instance instanceof \Witals\Framework\Contracts\ResettableInterface) {
+                $instance->reset();
+            }
+        }
+
         // Bind the current request instance to the container
         $this->app->instance(Request::class, $request);
 
