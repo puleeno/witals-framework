@@ -403,6 +403,104 @@ class ContainerTest extends TestCase
 
         $this->assertSame('default', $instance->value);
     }
+
+    public function testCallWithExplicitParameters(): void
+    {
+        $result = $this->container->call(fn(string $name) => "Hello {$name}", ['name' => 'World']);
+        $this->assertSame('Hello World', $result);
+    }
+
+    public function testCallWithIndexedParameters(): void
+    {
+        $result = $this->container->call(fn(string $a, string $b) => $a . $b, ['first', 'second']);
+        $this->assertSame('firstsecond', $result);
+    }
+
+    public function testCallOnObjectMethod(): void
+    {
+        $obj = new ContainerTestMethod();
+        $result = $this->container->call([$obj, 'greet'], ['name' => 'PHP']);
+        $this->assertSame('Hello PHP', $result);
+    }
+
+    public function testExtendOnSingletonResolvedBeforeExtension(): void
+    {
+        $this->container->singleton('counter', fn() => new \stdClass());
+        $first = $this->container->make('counter');
+        $first->value = 1;
+
+        $this->container->extend('counter', fn($instance, $c) => $instance);
+        $second = $this->container->make('counter');
+        $this->assertSame(1, $second->value);
+    }
+
+    public function testRunScopeRestoresBindings(): void
+    {
+        $this->container->bind('key', fn() => 'original');
+        $this->container->runScope(['key' => fn() => 'scoped'], function () {
+            $this->assertSame('scoped', $this->container->make('key'));
+        });
+        $this->assertSame('original', $this->container->make('key'));
+    }
+
+    public function testRunScopeDoesNotLeakBindings(): void
+    {
+        $this->container->bind('leak.a', fn() => 'original');
+        $this->container->runScope(['leak.a' => fn() => 'scoped'], function () {
+            $this->assertSame('scoped', $this->container->make('leak.a'));
+        });
+        $this->assertSame('original', $this->container->make('leak.a'));
+    }
+
+    public function testRunScopeIsolation(): void
+    {
+        $this->container->bind('isolated.key', fn() => 'root');
+        $result = $this->container->runScope(['isolated.key' => fn() => 'scoped'], function () {
+            return $this->container->make('isolated.key');
+        });
+        $this->assertSame('scoped', $result);
+        $this->assertSame('root', $this->container->make('isolated.key'));
+    }
+
+    public function testForgetInstanceNonExistentDoesNotThrow(): void
+    {
+        $this->container->forgetInstance('nonexistent');
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testFlushClearsAllState(): void
+    {
+        $this->container->bind('test', fn() => 'value');
+        $this->container->instance('obj', new \stdClass());
+        $this->container->make('test');
+
+        $this->container->flush();
+
+        $this->assertEmpty($this->container->getBindings());
+        $this->assertEmpty($this->container->getInstances());
+        $this->assertFalse($this->container->has('test'));
+    }
+
+    public function testResolveWithPrimitiveParameterIsSkipped(): void
+    {
+        $instance = $this->container->make(ContainerTestWithPrimitive::class, ['name' => 'test']);
+        $this->assertSame('test', $instance->name);
+    }
+}
+
+class ContainerTestMethod
+{
+    public function greet(string $name): string
+    {
+        return "Hello {$name}";
+    }
+}
+
+class ContainerTestWithPrimitive
+{
+    public function __construct(public string $name)
+    {
+    }
 }
 
 class ContainerTestDependency

@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Witals\Framework\Tests\Module;
 
+require_once __DIR__ . '/ApplicationStub.php';
+
 use PHPUnit\Framework\TestCase;
 use Witals\Framework\Application;
 use Witals\Framework\Contracts\RuntimeType;
 use Witals\Framework\Module\ModuleManager;
 use Witals\Framework\Module\ModuleDiscoveryService;
 use Witals\Framework\Module\ModuleRouter;
+use Witals\Framework\Module\ModuleLifecycleManager;
 use Witals\Framework\Module\Hook;
+use Witals\Framework\Module\Contracts\HookInterface;
 
 class HelpersTest extends TestCase
 {
@@ -64,7 +68,9 @@ class HelpersTest extends TestCase
     public function test_add_action_and_do_action(): void
     {
         $app = new ApplicationStub($this->tmpDir, RuntimeType::TRADITIONAL);
-        $app->instance(Hook::class, new Hook());
+        $hook = new Hook();
+        $app->instance(Hook::class, $hook);
+        $app->instance(HookInterface::class, $hook);
 
         $executed = false;
         add_action('test', function () use (&$executed) {
@@ -79,7 +85,9 @@ class HelpersTest extends TestCase
     public function test_add_filter_and_apply_filters(): void
     {
         $app = new ApplicationStub($this->tmpDir, RuntimeType::TRADITIONAL);
-        $app->instance(Hook::class, new Hook());
+        $hook = new Hook();
+        $app->instance(Hook::class, $hook);
+        $app->instance(HookInterface::class, $hook);
 
         add_filter('test', function (string $v) {
             return strtoupper($v);

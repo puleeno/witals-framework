@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Routing;
 
 use Witals\Framework\Application;
+use Witals\Framework\Contracts\ResettableInterface;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use App\Http\Routing\Contracts\RouteRegistryInterface;
 
-class RouteRegistry implements RouteRegistryInterface
+class RouteRegistry implements RouteRegistryInterface, ResettableInterface
 {
     protected array $routes = [];
     protected array $compiled = [];
@@ -263,6 +264,11 @@ class RouteRegistry implements RouteRegistryInterface
         $this->staticIndex = [];
         $this->dynamicIndex = [];
         $this->indexed = false;
+    }
+
+    public function reset(): void
+    {
+        $this->clear();
     }
 
     public function runAction(mixed $action, Request $request, array $params = []): Response
