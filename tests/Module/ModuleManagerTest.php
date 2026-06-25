@@ -50,7 +50,8 @@ class ModuleManagerTest extends TestCase
         $discovery = new \Witals\Framework\Module\ModuleDiscoveryService($this->app, $modulesDir);
         $router = new \Witals\Framework\Module\ModuleRouter($this->app, $discovery);
         $logger = new LoggerStub();
-        $manager = new ModuleManager($this->app, $discovery, $router, $logger);
+        $lifecycle = new \Witals\Framework\Module\ModuleLifecycleManager($this->app, $discovery, $logger);
+        $manager = new ModuleManager($this->app, $discovery, $router, $lifecycle, $logger);
         $router->setModuleLoader(fn(string $name) => $manager->load($name));
         return $manager;
     }

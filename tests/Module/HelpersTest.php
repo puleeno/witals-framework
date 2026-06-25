@@ -21,7 +21,8 @@ class HelpersTest extends TestCase
         $discovery = new ModuleDiscoveryService($app, $dir);
         $router = new ModuleRouter($app, $discovery);
         $logger = new LoggerStub();
-        $manager = new ModuleManager($app, $discovery, $router, $logger);
+        $lifecycle = new ModuleLifecycleManager($app, $discovery, $logger);
+        $manager = new ModuleManager($app, $discovery, $router, $lifecycle, $logger);
         $router->setModuleLoader(fn(string $name) => $manager->load($name));
         return $manager;
     }

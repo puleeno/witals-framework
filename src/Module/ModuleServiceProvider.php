@@ -19,10 +19,25 @@ class ModuleServiceProvider extends ServiceProvider
             return new ModuleRouter($app, $app->make(ModuleDiscoveryService::class));
         });
 
+        $this->app->singleton(ModuleLifecycleManager::class, function ($app) {
+            return new ModuleLifecycleManager(
+                $app,
+                $app->make(ModuleDiscoveryService::class),
+                $app->make(\Psr\Log\LoggerInterface::class),
+            );
+        });
+
         $this->app->singleton(ModuleManager::class, function ($app) {
             $discovery = $app->make(ModuleDiscoveryService::class);
             $router = $app->make(ModuleRouter::class);
-            $manager = new ModuleManager($app, $discovery, $router, $app->make(\Psr\Log\LoggerInterface::class));
+            $lifecycle = $app->make(ModuleLifecycleManager::class);
+            $manager = new ModuleManager(
+                $app,
+                $discovery,
+                $router,
+                $lifecycle,
+                $app->make(\Psr\Log\LoggerInterface::class),
+            );
             $router->setModuleLoader(fn(string $name) => $manager->load($name));
             return $manager;
         });
