@@ -10,7 +10,7 @@
     "autoload": {
         "psr-4": {
             "Witals\\Framework\\": "src/",
-            "App\\": "app/",
+            "Witals\\App\\": "app/",
             "Modules\\": "modules/"
         },
         "files": [
