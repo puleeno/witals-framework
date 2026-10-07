@@ -10,6 +10,7 @@ use Witals\Framework\Console\Commands\MakeBlockCommand;
 use Witals\Framework\Console\Commands\MakeCommandCommand;
 use Witals\Framework\Console\Commands\MakeProviderCommand;
 use Witals\Framework\Console\Commands\CacheClearCommand;
+use Witals\Framework\Console\Commands\ModulePublishCommand;
 
 class ConsoleServiceProvider extends ServiceProvider
 {
@@ -25,6 +26,9 @@ class ConsoleServiceProvider extends ServiceProvider
             $kernel->register(ConfigClearCommand::class);
             $kernel->register(DownCommand::class);
             $kernel->register(UpCommand::class);
+
+            // Module Commands
+            $kernel->register(ModulePublishCommand::class);
 
             // Generator Commands
             $kernel->register(MakeModuleCommand::class);
