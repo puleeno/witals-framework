@@ -35,7 +35,6 @@ class ModulePublisher
         $this->modulePaths = $modulePaths !== [] ? array_values($modulePaths) : [
             $app->basePath('modules'),
             $app->basePath('framework/witals/modules'),
-            $app->basePath('framework/presto/modules'),
         ];
     }
 

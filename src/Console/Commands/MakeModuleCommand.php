@@ -13,7 +13,7 @@ class MakeModuleCommand extends MakeCommand
     protected string $type = 'Module';
     protected array $arguments = ['name' => 'The name of the module (e.g., Blog)'];
     protected array $options = [
-        '--presto' => 'Create in PrestoWorld modules (framework/presto/modules)',
+        '--presto' => 'Create in PrestoWorld modules (modules/)',
         '--witals' => 'Create in Witals modules (framework/witals/modules) [default]',
     ];
 
@@ -87,7 +87,7 @@ class MakeModuleCommand extends MakeCommand
     protected function getBaseDir(): string
     {
         if ($this->isPresto) {
-            return $this->app->basePath() . '/framework/presto/modules';
+            return $this->app->basePath() . '/modules';
         }
         return $this->app->basePath() . '/framework/witals/modules';
     }

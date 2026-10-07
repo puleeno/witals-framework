@@ -59,7 +59,7 @@ PHP;
     {
         $module = $this->getModuleName();
         $className = $this->getClassNameFromBlock($this->blockName);
-        return $this->app->basePath() . "/framework/presto/modules/{$module}/Renderer/Blocks/{$className}.php";
+        return $this->app->basePath() . "/modules/{$module}/Renderer/Blocks/{$className}.php";
     }
 
     protected function getNamespace(string $name): string

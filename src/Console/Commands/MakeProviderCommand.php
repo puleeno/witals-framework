@@ -44,7 +44,7 @@ PHP;
         foreach ($argv as $arg) {
             if (str_starts_with($arg, '--module=')) {
                 $module = substr($arg, 9);
-                return $this->app->basePath() . "/framework/presto/modules/{$module}/Providers/{$name}.php";
+                return $this->app->basePath() . "/modules/{$module}/Providers/{$name}.php";
             }
         }
         return $this->app->basePath() . "/framework/presto/Foundation/Providers/{$name}.php";
