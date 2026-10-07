@@ -93,7 +93,7 @@ class MakeBlockCommandTest extends TestCase
     public function test_getPath_returns_correct_path(): void
     {
         $result = $this->command->getPath('test');
-        $expected = $this->tmpDir . '/framework/presto/modules/Gutenberg/Renderer/Blocks/TestBlock.php';
+        $expected = $this->tmpDir . '/modules/Gutenberg/Renderer/Blocks/TestBlock.php';
         $this->assertSame($expected, $result);
     }
 

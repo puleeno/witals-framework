@@ -78,7 +78,7 @@ class MakeProviderCommandTest extends TestCase
         $argv = ['witals', 'make:provider', 'TestProvider', '--module=Blog'];
 
         $result = $this->command->getPath('TestProvider');
-        $expected = $this->tmpDir . '/framework/presto/modules/Blog/Providers/TestProvider.php';
+        $expected = $this->tmpDir . '/modules/Blog/Providers/TestProvider.php';
         $this->assertSame($expected, $result);
 
         $argv = $originalArgv;

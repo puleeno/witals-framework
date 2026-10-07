@@ -10,8 +10,8 @@ use Witals\Framework\Application;
  * Clones module-owned assets into the project root.
  *
  * Modules keep their source of truth in their own directory:
- *   framework/presto/modules/<Module>/config/*.php       → <root>/config/
- *   framework/presto/modules/<Module>/migrations/*.php   → <root>/database/migrations/
+ *   modules/<Module>/config/*.php       → <root>/config/
+ *   modules/<Module>/migrations/*.php   → <root>/database/migrations/
  *
  * Published copies are what the runtime loads (ConfigRepository reads <root>/config,
  * SchemaMigrationManager reads <root>/database/migrations), so publishing is a plain file clone.

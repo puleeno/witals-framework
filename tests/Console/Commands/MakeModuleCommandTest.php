@@ -69,7 +69,7 @@ class MakeModuleCommandTest extends TestCase
     {
         $this->command->isPresto = true;
         $result = $this->command->getPath('Blog');
-        $expected = $this->tmpDir . '/framework/presto/modules/Blog/Module.php';
+        $expected = $this->tmpDir . '/modules/Blog/Module.php';
         $this->assertSame($expected, $result);
     }
 
