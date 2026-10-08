@@ -170,6 +170,14 @@ class Request
         return $this->headers[$key] ?? $default;
     }
 
+    public function server(?string $key = null, mixed $default = null): mixed
+    {
+        if ($key === null) {
+            return $this->server;
+        }
+        return $this->server[$key] ?? $default;
+    }
+
     public function cookie(string $key, mixed $default = null): mixed
     {
         return $this->cookies[$key] ?? $default;

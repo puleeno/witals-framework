@@ -29,7 +29,7 @@ class CookieTransport implements HttpTransportInterface
         $expires = $expiresAt ? $expiresAt->getTimestamp() : 0;
         $path = '/';
         $domain = ''; // default
-        $secure = true;
+        $secure = $this->isSecure($request);
         $httponly = true;
         $sameSite = 'Lax';
         
@@ -49,10 +49,24 @@ class CookieTransport implements HttpTransportInterface
 
     public function removeToken(Request $request, Response $response, TokenInterface $token): Response
     {
+        $secure = $this->isSecure($request);
+
          $cookieValue = sprintf(
-            '%s=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax',
-            $this->cookieName
+            '%s=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; %sHttpOnly; SameSite=Lax',
+            $this->cookieName,
+            $secure ? 'Secure; ' : '',
         );
         return $response->withHeader('Set-Cookie', $cookieValue);
+    }
+
+    protected function isSecure(Request $request): bool
+    {
+        $forwarded = $request->header('X-Forwarded-Proto');
+        if (is_string($forwarded) && strtolower($forwarded) === 'https') {
+            return true;
+        }
+
+        $https = $request->server('HTTPS');
+        return is_string($https) && $https !== '' && strtolower($https) !== 'off';
     }
 }
