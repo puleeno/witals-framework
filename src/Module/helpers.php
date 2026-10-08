@@ -16,9 +16,9 @@ if (!function_exists('module')) {
 }
 
 if (!function_exists('add_action')) {
-    function add_action(string $hook, callable $callback, int $priority = 10): void
+    function add_action(string $hook, callable $callback, int $priority = 10, int $accepted_args = 1): void
     {
-        app(HookInterface::class)->addAction($hook, $callback, $priority);
+        app(HookInterface::class)->addAction($hook, $callback, $priority, $accepted_args);
     }
 }
 
@@ -30,9 +30,9 @@ if (!function_exists('do_action')) {
 }
 
 if (!function_exists('add_filter')) {
-    function add_filter(string $hook, callable $callback, int $priority = 10): void
+    function add_filter(string $hook, callable $callback, int $priority = 10, int $accepted_args = 1): void
     {
-        app(HookInterface::class)->addFilter($hook, $callback, $priority);
+        app(HookInterface::class)->addFilter($hook, $callback, $priority, $accepted_args);
     }
 }
 

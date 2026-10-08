@@ -9,11 +9,11 @@ namespace Witals\Framework\Module\Contracts;
  */
 interface HookInterface
 {
-    public function addAction(string $hook, callable $callback, int $priority = 10): void;
+    public function addAction(string $hook, callable $callback, int $priority = 10, int $acceptedArgs = 1): void;
 
     public function doAction(string $hook, mixed ...$args): void;
 
-    public function addFilter(string $hook, callable $callback, int $priority = 10): void;
+    public function addFilter(string $hook, callable $callback, int $priority = 10, int $acceptedArgs = 1): void;
 
     public function applyFilters(string $hook, mixed $value, mixed ...$args): mixed;
 

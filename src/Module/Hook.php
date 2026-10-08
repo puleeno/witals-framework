@@ -18,7 +18,7 @@ class Hook implements HookInterface
 
     protected array $filters = [];
 
-    public function addAction(string $hook, callable $callback, int $priority = 10): void
+    public function addAction(string $hook, callable $callback, int $priority = 10, int $acceptedArgs = 1): void
     {
         $this->actions[$hook][$priority][] = $callback;
         ksort($this->actions[$hook]);
@@ -37,7 +37,7 @@ class Hook implements HookInterface
         }
     }
 
-    public function addFilter(string $hook, callable $callback, int $priority = 10): void
+    public function addFilter(string $hook, callable $callback, int $priority = 10, int $acceptedArgs = 1): void
     {
         $this->filters[$hook][$priority][] = $callback;
         ksort($this->filters[$hook]);
