@@ -22,6 +22,8 @@ class ModuleLifecycleManager
 
     protected static bool $autoloadersRegistered = false;
 
+    protected array $loadOrderCache = [];
+
     public function __construct(
         protected Application $app,
         protected ModuleDiscoveryService $discoveryService,
@@ -74,6 +76,8 @@ class ModuleLifecycleManager
 
         try {
             $path = $meta['_path'];
+            $this->loadModuleComposerAutoload($meta, $path);
+
             $entryClass = $this->entryClassFromMeta($meta);
 
             $instance = $entryClass !== null && class_exists($entryClass)
@@ -122,7 +126,7 @@ class ModuleLifecycleManager
 
     public function loadSupportModules(): void
     {
-        $sorted = $this->sortByPriority();
+        $sorted = $this->sortModulesForLoading('support');
 
         foreach ($sorted as $name => $meta) {
             if (!($meta['enabled'] ?? false)) {
@@ -209,6 +213,130 @@ class ModuleLifecycleManager
         return $modules;
     }
 
+    protected function sortModulesForLoading(?string $type = null): array
+    {
+        $key = $type ?? '__all__';
+        if (isset($this->loadOrderCache[$key])) {
+            return $this->loadOrderCache[$key];
+        }
+
+        $map = $this->discoveryService->getMetadataMap();
+        $candidates = [];
+
+        foreach ($map as $name => $meta) {
+            if (str_contains($name, '.')) {
+                continue;
+            }
+            if (empty($meta['enabled'])) {
+                continue;
+            }
+            $eff = $meta['_type'] ?? ($meta['type'] ?? 'support');
+            if ($type !== null && $eff !== $type) {
+                continue;
+            }
+            $candidates[$name] = $meta;
+        }
+
+        $count = count($candidates);
+        if ($count === 0) {
+            $this->loadOrderCache[$key] = $candidates;
+            return $candidates;
+        }
+        if ($count === 1) {
+            $this->loadOrderCache[$key] = $candidates;
+            return $candidates;
+        }
+
+        $indegree = [];
+        $graph = [];
+        foreach ($candidates as $name => $meta) {
+            $indegree[$name] = 0;
+            $graph[$name] = [];
+        }
+
+        foreach ($candidates as $name => $meta) {
+            $deps = $meta['dependencies'] ?? null;
+            if (!is_array($deps) || empty($deps)) {
+                continue;
+            }
+            if (array_is_list($deps)) {
+                $dCount = count($deps);
+                for ($i = 0; $i < $dCount; $i++) {
+                    $d = $deps[$i];
+                    if (!is_string($d) || $d === '' || !isset($candidates[$d])) {
+                        continue;
+                    }
+                    $indegree[$name]++;
+                    $graph[$d][] = $name;
+                }
+            } else {
+                foreach ($deps as $d => $_constraint) {
+                    if (!is_string($d) || $d === '' || !isset($candidates[$d])) {
+                        continue;
+                    }
+                    $indegree[$name]++;
+                    $graph[$d][] = $name;
+                }
+            }
+        }
+
+        $queue = [];
+        foreach ($candidates as $name => $meta) {
+            if ($indegree[$name] === 0) {
+                $queue[] = $name;
+            }
+        }
+
+        usort($queue, function ($a, $b) use ($candidates) {
+            $pa = $candidates[$a]['priority'] ?? 50;
+            $pb = $candidates[$b]['priority'] ?? 50;
+            if ($pa === $pb) {
+                $na = $candidates[$a]['name'] ?? $a;
+                $nb = $candidates[$b]['name'] ?? $b;
+                return $na <=> $nb;
+            }
+            return $pa <=> $pb;
+        });
+
+        $result = [];
+        $head = 0;
+        $qCount = count($queue);
+        while ($head < $qCount) {
+            $cur = $queue[$head++];
+            $result[$cur] = $candidates[$cur];
+            $neighbors = &$graph[$cur];
+            $nCount = count($neighbors);
+            for ($i = 0; $i < $nCount; $i++) {
+                $nbr = $neighbors[$i];
+                $indegree[$nbr]--;
+                if ($indegree[$nbr] === 0) {
+                    $queue[] = $nbr;
+                    $qCount++;
+                }
+            }
+            unset($neighbors);
+        }
+
+        if (count($result) < $count) {
+            foreach ($candidates as $name => $meta) {
+                if (!isset($result[$name])) {
+                    $result[$name] = $meta;
+                }
+            }
+            uasort($result, function ($a, $b) {
+                $pa = $a['priority'] ?? 50;
+                $pb = $b['priority'] ?? 50;
+                if ($pa === $pb) {
+                    return ($a['name'] ?? '') <=> ($b['name'] ?? '');
+                }
+                return $pa <=> $pb;
+            });
+        }
+
+        $this->loadOrderCache[$key] = $result;
+        return $result;
+    }
+
     protected function registerModuleAutoloaders(): void
     {
         if (self::$autoloadersRegistered) {
@@ -261,6 +389,24 @@ class ModuleLifecycleManager
         });
     }
 
+    protected function loadModuleComposerAutoload(array $meta, string $path): void
+    {
+        $composer = $meta['composer'] ?? false;
+        if (!$composer) {
+            return;
+        }
+
+        $autoloadPath = $path . '/vendor/autoload.php';
+
+        if (is_array($composer) && isset($composer['autoload'])) {
+            $autoloadPath = $path . '/' . ltrim((string) $composer['autoload'], '/');
+        }
+
+        if (file_exists($autoloadPath)) {
+            require_once $autoloadPath;
+        }
+    }
+
     public function reset(): void
     {
         $this->loaded = [];
@@ -269,5 +415,6 @@ class ModuleLifecycleManager
         self::$moduleClassmap = [];
         self::$moduleAutoloadMap = null;
         self::$autoloadersRegistered = false;
+        $this->loadOrderCache = [];
     }
 }

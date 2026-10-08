@@ -27,6 +27,7 @@ class ModuleManifest
         'autoload' => [],
         'functions' => [],
         'keywords' => [],
+        'composer' => false,
     ];
 
     public function __construct(string $modulePath)
@@ -188,6 +189,16 @@ class ModuleManifest
     public function enabled(): bool
     {
         return $this->data['enabled'] ?? true;
+    }
+
+    public function usesComposer(): bool
+    {
+        return (bool) ($this->data['composer'] ?? false);
+    }
+
+    public function getComposer(): mixed
+    {
+        return $this->data['composer'] ?? false;
     }
 
     public function namespace(): string
