@@ -14,6 +14,7 @@
             "Modules\\": "modules/"
         },
         "files": [
+            "app/Support/helpers.php",
             "src/Module/helpers.php"
         ]
     },
