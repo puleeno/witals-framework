@@ -23,6 +23,7 @@ class ModuleDiscoveryService
         $this->modulePaths = [
             $modulesPath,
             $app->basePath('framework/witals/modules'),
+            $app->basePath('framework/presto/Modules'),
         ];
     }
 

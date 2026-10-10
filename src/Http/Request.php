@@ -198,6 +198,25 @@ class Request
         return $this->body;
     }
 
+    /**
+     * Get JSON payload as associative array.
+     */
+    public function getJson(): ?array
+    {
+        if ($this->body !== null && $this->body !== '') {
+            $decoded = json_decode($this->body, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        if (!empty($this->post) && is_array($this->post)) {
+            return $this->post;
+        }
+
+        return null;
+    }
+
     public function isMethod(string $method): bool
     {
         return $this->method === strtoupper($method);
