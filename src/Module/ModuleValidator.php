@@ -161,7 +161,7 @@ class ModuleValidator
 
     protected function validateDependencies(string $name, array $metadata, array $allMetadata): void
     {
-        $dependencies = $metadata['dependencies'] ?? [];
+        $dependencies = $metadata['dependencies'] ?? $metadata['depends'] ?? [];
 
         // Handle both list ["schema"] and map {"schema": "^1.0.0"}
         $depNames = is_array($dependencies) ? (array_is_list($dependencies) ? $dependencies : array_keys($dependencies)) : [];
