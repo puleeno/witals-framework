@@ -87,9 +87,17 @@ class Module implements ModuleInterface
 
     public function getDependencies(): array
     {
-        $deps = $this->metadata['dependencies'] ?? [];
+        $deps = $this->metadata['dependencies'] ?? $this->metadata['depends'] ?? [];
 
-        return is_array($deps) ? array_keys($deps) : $deps;
+        if (!is_array($deps) || $deps === []) {
+            return [];
+        }
+
+        // Map form: { "module": "^1.0.0" } — names are the keys.
+        // List form: [ "module" ] — names are string values.
+        return array_is_list($deps)
+            ? array_values(array_filter($deps, 'is_string'))
+            : array_keys($deps);
     }
 
     public function getDependencyNames(): array
