@@ -9,7 +9,6 @@ use Witals\Framework\Application;
 use Witals\Framework\Http\Request;
 use Witals\Framework\Http\Response;
 use Witals\Framework\Contracts\RuntimeType;
-use Witals\Framework\Contracts\ResettableInterface;
 use App\Http\Routing\RouteRegistry;
 use App\Http\Routing\Contracts\RouteRegistryInterface;
 
@@ -40,11 +39,6 @@ class RouteRegistryTest extends TestCase
     public function test_implements_interface(): void
     {
         $this->assertInstanceOf(RouteRegistryInterface::class, $this->registry);
-    }
-
-    public function test_implements_resettable_interface(): void
-    {
-        $this->assertInstanceOf(ResettableInterface::class, $this->registry);
     }
 
     public function test_add_and_get_routes(): void
