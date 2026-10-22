@@ -42,6 +42,10 @@ class AuthMiddleware
         // 4. Start Context
         if ($token !== null) {
             $authContext->start($token);
+        } elseif ($authContext->getToken() !== null) {
+            // Long-running workers reuse the container singleton — drop the
+            // previous request's token so this request starts anonymous.
+            $authContext->close();
         }
 
         // 5. Run next handler within an IoC Scope
