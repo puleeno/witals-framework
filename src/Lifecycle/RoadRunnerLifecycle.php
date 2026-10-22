@@ -179,9 +179,12 @@ class RoadRunnerLifecycle implements LifecycleManager
      */
     protected function initializeRequest(Request $request): void
     {
-        // Set up fresh request context
-        // Initialize session for this request
-        // Set up CSRF tokens
+        $_GET = $request->query();
+        $_POST = $request->post();
+        if (method_exists($request, 'cookies')) {
+            $_COOKIE = $request->cookies();
+        }
+        $_REQUEST = array_merge($_GET, $_POST, $_COOKIE);
     }
 
     /**

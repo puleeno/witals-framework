@@ -183,6 +183,11 @@ class Request
         return $this->cookies[$key] ?? $default;
     }
 
+    public function cookies(): array
+    {
+        return $this->cookies;
+    }
+
     public function files(): array
     {
         return $this->files;
