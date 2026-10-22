@@ -49,6 +49,9 @@ class ModulePublisher
     /**
      * Module directories that actually contain the given source directory.
      *
+     * Domain modules (modules/<Module>/Domain/<Slice>) are published as well:
+     * they own migrations their parent module depends on.
+     *
      * @return list<string>
      */
     public function sources(string $kind): array
@@ -61,13 +64,38 @@ class ModulePublisher
             }
 
             foreach ($this->directories($modulesPath) as $modulePath) {
-                if (is_dir($modulePath . '/' . $kind)) {
+                if ($this->hasSourceDirectory($modulePath, $kind)) {
                     $sources[] = $modulePath;
+                }
+
+                $domainPath = $modulePath . '/Domain';
+                if (!is_dir($domainPath)) {
+                    continue;
+                }
+
+                foreach ($this->directories($domainPath) as $slicePath) {
+                    if ($this->hasSourceDirectory($slicePath, $kind)) {
+                        $sources[] = $slicePath;
+                    }
                 }
             }
         }
 
         return $sources;
+    }
+
+    /**
+     * Whether the module owns a directory of the given kind. Modules ship
+     * migrations either as migrations or Migrations, so the lookup has to be
+     * case insensitive.
+     */
+    private function hasSourceDirectory(string $modulePath, string $kind): bool
+    {
+        if (is_dir($modulePath . '/' . $kind)) {
+            return true;
+        }
+
+        return $kind === 'migrations' && is_dir($modulePath . '/Migrations');
     }
 
     /**
