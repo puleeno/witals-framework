@@ -211,6 +211,19 @@ class ModuleDiscoveryService
             } elseif (str_ends_with($item, '.php')) {
                 $className = $namespace . pathinfo($item, PATHINFO_FILENAME);
                 $classmap[$className] = $path;
+
+                // Also parse the file for additional classes/interfaces/traits/enums
+                $content = @file_get_contents($path);
+                if ($content !== false) {
+                    if (preg_match_all('/\b(class|interface|trait|enum)\s+(\w+)/', $content, $matches)) {
+                        foreach ($matches[2] as $name) {
+                            $fullName = $namespace . $name;
+                            if (!isset($classmap[$fullName])) {
+                                $classmap[$fullName] = $path;
+                            }
+                        }
+                    }
+                }
             }
         }
     }

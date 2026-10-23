@@ -126,6 +126,8 @@ class ModuleLifecycleManager
 
     public function loadSupportModules(): void
     {
+        $this->registerModuleAutoloaders();
+
         $sorted = $this->sortModulesForLoading('support');
 
         foreach ($sorted as $name => $meta) {
@@ -141,8 +143,6 @@ class ModuleLifecycleManager
             }
             $this->load($name);
         }
-
-        $this->registerModuleAutoloaders();
     }
 
     protected function loadDependencies(Module $module): void
@@ -366,6 +366,7 @@ class ModuleLifecycleManager
         }
 
         self::$moduleAutoloadMap = $prefixes;
+        self::$moduleClassmap = $this->discoveryService->buildClassMap();
 
         spl_autoload_register(function (string $class): void {
             if (isset(self::$moduleClassmap[$class])) {
