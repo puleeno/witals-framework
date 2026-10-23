@@ -25,7 +25,14 @@ if (!function_exists('add_action')) {
 if (!function_exists('do_action')) {
     function do_action(string $hook, mixed ...$args): void
     {
-        app(HookInterface::class)->doAction($hook, ...$args);
+        static $resolved = null;
+
+        $container = app();
+        if ($resolved === null || $resolved[0] !== $container) {
+            $resolved = [$container, $container->make(HookInterface::class)];
+        }
+
+        $resolved[1]->doAction($hook, ...$args);
     }
 }
 
@@ -39,6 +46,16 @@ if (!function_exists('add_filter')) {
 if (!function_exists('apply_filters')) {
     function apply_filters(string $hook, mixed $value, mixed ...$args): mixed
     {
-        return app(HookInterface::class)->applyFilters($hook, $value, ...$args);
+        // Memo theo container instance: bỏ qua resolve mỗi call (hot path —
+        // vài trăm call/render block) nhưng vẫn an toàn nếu container đổi
+        // giữa request (test bootstrap).
+        static $resolved = null;
+
+        $container = app();
+        if ($resolved === null || $resolved[0] !== $container) {
+            $resolved = [$container, $container->make(HookInterface::class)];
+        }
+
+        return $resolved[1]->applyFilters($hook, $value, ...$args);
     }
 }
