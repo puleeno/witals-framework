@@ -28,17 +28,30 @@ class QueueWorkCommand extends Command
 
     public function handle(array $args): int
     {
-        $connection = $args[0] ?? 'default';
         $options = $this->parseOptions($args);
 
+        /** @var QueueManager $manager */
+        $manager = $this->app->make(QueueManager::class);
+
+        // With no explicit connection, follow the application's default
+        // connection (QUEUE_CONNECTION). Queue name also follows the
+        // connection config so switching drivers needs no command changes.
+        $connection = null;
+        foreach ($args as $arg) {
+            if (is_string($arg) && !str_starts_with($arg, '-')) {
+                $connection = $arg;
+                break;
+            }
+        }
+        $connection ??= $manager->getConnectionName();
+        $queue = $options['queue'] ?? $manager->getQueueName($connection);
+
         $this->info("Starting queue worker for connection: {$connection}");
-        $this->info("  queue: " . ($options['queue'] ?? 'default'));
+        $this->info("  queue: {$queue}");
         $this->info("  sleep: " . ($options['sleep'] ?? 3));
         $this->info("  max_tries: " . ($options['max-tries'] ?? 0));
         $this->info("  memory: " . ($options['memory'] ?? 128) . "MB");
 
-        /** @var QueueManager $manager */
-        $manager = $this->app->make(QueueManager::class);
         $worker = $manager->getWorker();
 
         if ($this->app->has(\Psr\Log\LoggerInterface::class)) {
@@ -47,7 +60,7 @@ class QueueWorkCommand extends Command
 
         $worker->daemon(
             connection: $connection,
-            queue: $options['queue'] ?? 'default',
+            queue: $queue,
             options: [
                 'sleep' => (int) ($options['sleep'] ?? 3),
                 'max_tries' => (int) ($options['max-tries'] ?? 0),

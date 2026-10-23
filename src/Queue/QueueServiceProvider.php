@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Witals\Framework\Queue;
 
-use Witals\Framework\Queue\Contracts\FailedJobProviderInterface;
-use Witals\Framework\Queue\FailedJob\DatabaseFailedJobProvider;
 use Witals\Framework\Support\ServiceProvider;
 
 class QueueServiceProvider extends ServiceProvider
@@ -17,12 +15,15 @@ class QueueServiceProvider extends ServiceProvider
             $queueConfig = $config['queue'] ?? $this->getDefaultConfig();
 
             $manager = new QueueManager($queueConfig);
+            $manager->setContainer($app);
 
             if ($app->has(\Psr\Log\LoggerInterface::class)) {
                 $manager->setLogger($app->make(\Psr\Log\LoggerInterface::class));
             }
 
-            $manager->setFailedJobProvider($this->resolveFailedJobProvider($queueConfig));
+            $manager->setFailedJobProvider(
+                $manager->createFailedJobProvider($queueConfig['failed'] ?? null)
+            );
 
             return $manager;
         });
@@ -39,23 +40,6 @@ class QueueServiceProvider extends ServiceProvider
         $kernel->register(\Witals\Framework\Queue\Console\QueueRetryCommand::class);
         $kernel->register(\Witals\Framework\Queue\Console\QueueFlushCommand::class);
         $kernel->register(\Witals\Framework\Queue\Console\QueueForgetCommand::class);
-    }
-
-    protected function resolveFailedJobProvider(array $config): ?FailedJobProviderInterface
-    {
-        $driver = $config['failed'] ?? null;
-
-        if ($driver === null) {
-            return null;
-        }
-
-        return match ($driver['driver'] ?? 'database') {
-            'database' => new DatabaseFailedJobProvider(
-                connection: $driver['connection'] ?? 'default',
-                table: $driver['table'] ?? 'failed_jobs',
-            ),
-            default => null,
-        };
     }
 
     protected function getDefaultConfig(): array
