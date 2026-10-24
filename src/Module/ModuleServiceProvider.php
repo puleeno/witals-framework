@@ -85,6 +85,18 @@ class ModuleServiceProvider extends ServiceProvider
         $manager = $this->app->make(ModuleManager::class);
         $manager->loadSupportModules();
 
+        // Load feature modules (e.g., BookPress, OwlPress) so their
+        // register() runs and routes/providers get bound.
+        foreach ($manager->sortModulesForLoading('feature') as $name => $meta) {
+            if (!($meta['enabled'] ?? false)) {
+                continue;
+            }
+            if (str_contains($name, '.')) {
+                continue;
+            }
+            $manager->load($name);
+        }
+
         $this->app->bootNewProviders($previousProviders);
 
         $kernel = $this->app->make(\Witals\Framework\Console\Kernel::class);
