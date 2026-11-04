@@ -73,6 +73,14 @@ class ModuleManager implements Contracts\ModuleManagerInterface
         $this->lifecycle->loadSupportModules();
     }
 
+    public function sortModulesForLoading(?string $type = null): array
+    {
+        $ref = new \ReflectionClass($this->lifecycle);
+        $method = $ref->getMethod('sortModulesForLoading');
+        $method->setAccessible(true);
+        return $method->invoke($this->lifecycle, $type);
+    }
+
     public function loadFunction(string $fullName): ?ModuleInterface
     {
         return $this->lifecycle->loadFunction($fullName);
