@@ -47,6 +47,11 @@ class Container implements ContainerContract
     protected array $buildStack = [];
 
     /**
+     * The abstracts currently being resolved.
+     */
+    protected array $resolutionStack = [];
+
+    /**
      * Get the globally available instance of the container.
      */
     public static function getInstance(): ?self
@@ -142,23 +147,34 @@ class Container implements ContainerContract
             return $this->instances[$abstract];
         }
 
-        // 2. Get the concrete type or closure.
-        $concrete = $this->getConcrete($abstract);
-
-        // 3. Build the instance
-        if ($this->isBuildable($concrete, $abstract)) {
-            $object = $this->build($concrete, $parameters);
-        } else {
-            // Recursive resolution
-            $object = $this->make($concrete, $parameters);
+        if (in_array($abstract, $this->resolutionStack, true)) {
+            $path = implode(' -> ', $this->resolutionStack) . ' -> ' . $abstract;
+            throw new BindingResolutionException("Circular dependency detected: {$path}");
         }
 
-        // 4. If shared, store it.
-        if ($this->isShared($abstract)) {
-            $this->instances[$abstract] = $object;
-        }
+        $this->resolutionStack[] = $abstract;
 
-        return $object;
+        try {
+            // 2. Get the concrete type or closure.
+            $concrete = $this->getConcrete($abstract);
+
+            // 3. Build the instance
+            if ($this->isBuildable($concrete, $abstract)) {
+                $object = $this->build($concrete, $parameters);
+            } else {
+                // Recursive resolution
+                $object = $this->make($concrete, $parameters);
+            }
+
+            // 4. If shared, store it.
+            if ($this->isShared($abstract)) {
+                $this->instances[$abstract] = $object;
+            }
+
+            return $object;
+        } finally {
+            array_pop($this->resolutionStack);
+        }
     }
 
     public function call(callable $callback, array $parameters = []): mixed

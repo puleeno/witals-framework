@@ -172,6 +172,16 @@ class ContainerTest extends TestCase
         $this->container->make(ContainerTestCircularA::class);
     }
 
+    public function testMakeThrowsExceptionForCircularClosureBinding(): void
+    {
+        $this->container->bind('circular', fn (Container $container) => $container->make('circular'));
+
+        $this->expectException(BindingResolutionException::class);
+        $this->expectExceptionMessage('Circular dependency detected: circular -> circular');
+
+        $this->container->make('circular');
+    }
+
     public function testMakeThrowsExceptionForNonInstantiableClass(): void
     {
         $this->expectException(BindingResolutionException::class);
