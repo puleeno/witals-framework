@@ -60,7 +60,7 @@ class MiddlewareTest extends TestCase
         $order = [];
 
         $mw1 = new class implements JobMiddlewareInterface {
-            public array &$order;
+            public array $order;
             public function handle(object $job, \Closure $next): void
             {
                 $this->order[] = 'mw1';
@@ -70,7 +70,7 @@ class MiddlewareTest extends TestCase
         $mw1->order = &$order;
 
         $mw2 = new class implements JobMiddlewareInterface {
-            public array &$order;
+            public array $order;
             public function handle(object $job, \Closure $next): void
             {
                 $this->order[] = 'mw2';

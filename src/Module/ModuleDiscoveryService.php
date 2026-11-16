@@ -195,12 +195,33 @@ class ModuleDiscoveryService
         file_put_contents($cacheFile, $content, LOCK_EX);
     }
 
+    /**
+     * Thư mục không bao giờ chứa class PHP của module. Bỏ qua để
+     * `scanDirForClassmap()` không đệ quy vào `node_modules` (hàng chục nghìn
+     * entry) — nguyên nhân `Maximum execution time of 30 seconds exceeded`
+     * khi cache discovery bị xoá.
+     */
+    private const SKIP_DIRS = [
+        '.',
+        '..',
+        '.git',
+        '.idea',
+        '.vscode',
+        'node_modules',
+        'vendor',
+        'dist',
+        'build',
+        'target',
+        'var',
+        'storage',
+    ];
+
     protected function scanDirForClassmap(string $namespace, string $dir, array &$classmap): void
     {
         $items = scandir($dir);
 
         foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
+            if (in_array($item, self::SKIP_DIRS, true)) {
                 continue;
             }
 
